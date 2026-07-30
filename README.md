@@ -20,6 +20,8 @@ sin límites de plataforma.
 | 7. Montaje final | `montaje.py` | Une imágenes/clips + audio en un MP4 (ffmpeg) | Activo y validado |
 | 8. Voz / Narración | `voz.py` | TTS de las letras del guion (edge/gTTS/openai/mock) | Activo y validado |
 | 9. Subtítulos | `subtitulos.py` | Genera SRT desde las letras (opcionalmente quemado) | Activo y validado |
+| 10. Miniatura | `thumbnail.py` | Thumbnail 1280x720 con el título (libass) | Activo y validado |
+| 11. Subida YouTube | `youtube.py` | Publica el vídeo vía Data API v3 (OAuth) | Implementado (requiere OAuth) |
 
 > Los **nodos 1→3** están completos y **validados** en modo mock. El **nodo 5
 > (Higgsfield)** ya está implementado contra la API REST oficial, pero requiere
@@ -203,6 +205,37 @@ tema es obligatorio). Cada vídeo va a su propia subcarpeta en `salidas/lote/`:
 python -m agente_yt --lote temas.txt --todo
 ```
 
+## Miniatura / thumbnail (nodo 10)
+
+Genera una miniatura **1280x720** (estándar de YouTube) con el título superpuesto,
+a partir de una imagen de escena o de un fotograma del vídeo final:
+
+```bash
+python -m agente_yt "Cancion de los colores" --todo --miniatura
+```
+
+## Subir a YouTube (nodo 11)
+
+Publica el vídeo final con la API de YouTube. La subida usa **OAuth2** (no basta
+una API key):
+
+1. En Google Cloud: habilita "YouTube Data API v3" y crea credenciales OAuth de
+   tipo "App de escritorio"; descarga el `client_secrets.json`.
+2. Instala: `pip install google-api-python-client google-auth google-auth-oauthlib`.
+3. Configura `.env`:
+   ```ini
+   AGENTE_YT_YT_CLIENT_SECRETS=/ruta/client_secrets.json
+   AGENTE_YT_YT_PRIVACY=unlisted        # private | unlisted | public
+   ```
+4. Sube (la primera vez se abre el navegador para dar consentimiento):
+   ```bash
+   python -m agente_yt "Cancion de los colores" --todo --subir --privacidad unlisted
+   ```
+
+> La subida marca el vídeo como "hecho para niños" (COPPA) y fija la miniatura si
+> se generó. Por seguridad, `--todo` **no** sube solo: subir siempre es explícito
+> con `--subir`.
+
 ## Todo en uno
 
 ```bash
@@ -210,8 +243,9 @@ python -m agente_yt "Cancion de los colores para ninos" --todo
 ```
 
 Encadena: guion → prompts → Higgsfield (imagen/vídeo) → voz (TTS) → **subtítulos**
-→ montaje final (con subtítulos quemados). Cada etapa informa su estado; si faltan
-credenciales de Higgsfield, avisa y no gasta créditos.
+→ montaje final (subtítulos quemados) → **miniatura**. Cada etapa informa su
+estado; si faltan credenciales de Higgsfield, avisa y no gasta créditos. Añade
+`--subir` para publicar en YouTube.
 
 ## Personalización
 
