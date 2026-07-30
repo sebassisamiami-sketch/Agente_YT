@@ -79,7 +79,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--todo",
         action="store_true",
-        help="TODO EN UNO: guion -> prompts -> Higgsfield -> montaje del video final.",
+        help="TODO EN UNO: guion -> prompts -> Higgsfield -> voz -> montaje final.",
+    )
+    parser.add_argument(
+        "--narrar",
+        action="store_true",
+        help="Genera voz (TTS) desde las letras del guion y la usa como audio del montaje.",
     )
     args = parser.parse_args(argv)
 
@@ -126,14 +131,18 @@ def main(argv: list[str] | None = None) -> int:
             "--listar-styles / --montar-dir)"
         )
 
-    # --todo activa las tres fases (guion -> Higgsfield -> montaje).
+    # --todo activa todas las fases (guion -> Higgsfield -> voz -> montaje).
     generar_video = args.generar_video or args.todo
     montar = args.todo
+    narrar = args.narrar or args.todo
 
     print(f"[Agente_YT] Proveedor LLM: {cfg.provider} | modelo: {cfg.model}")
     if args.todo:
         estado_hf = "SI" if cfg.higgsfield_configurado else "NO (faltan claves)"
-        print(f"[Agente_YT] Modo TODO EN UNO | Higgsfield configurado: {estado_hf}")
+        print(
+            f"[Agente_YT] Modo TODO EN UNO | Higgsfield: {estado_hf} | "
+            f"voz(TTS): {cfg.tts_provider}"
+        )
 
     try:
         res = ejecutar(
@@ -144,6 +153,7 @@ def main(argv: list[str] | None = None) -> int:
             generar_video=generar_video,
             montar=montar,
             audio=args.audio,
+            narrar=narrar,
         )
     except Exception as exc:  # noqa: BLE001 - queremos un mensaje claro en CLI
         print(f"[Agente_YT] ERROR: {exc}", file=sys.stderr)
@@ -167,6 +177,13 @@ def main(argv: list[str] | None = None) -> int:
             )
         if res.ruta_tabla:
             print(f"\n[guardado] {res.ruta_tabla}")
+
+    if narrar:
+        print("\n===== NODO 8: NARRACION DE VOZ (TTS) =====")
+        if res.ruta_voz:
+            print(f"[Agente_YT] Voz generada: {res.ruta_voz}")
+        if res.voz_nota:
+            print(f"[Agente_YT] {res.voz_nota}")
 
     if montar:
         print("\n===== NODO 7: MONTAJE DEL VIDEO FINAL =====")
