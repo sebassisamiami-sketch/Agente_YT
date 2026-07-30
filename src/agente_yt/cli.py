@@ -41,6 +41,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Lista los estilos Soul de Higgsfield y sale.",
     )
+    parser.add_argument(
+        "--verificar",
+        action="store_true",
+        help="Diagnostico: comprueba claves y herramientas (sin gastar creditos) y sale.",
+    )
     # --- Nodo 7: montaje ---
     parser.add_argument(
         "--montar-dir",
@@ -143,6 +148,22 @@ def main(argv: list[str] | None = None) -> int:
         import dataclasses
 
         cfg = dataclasses.replace(cfg, volumen_musica=args.volumen_musica)
+
+    # Diagnostico de configuracion (no gasta creditos).
+    if args.verificar:
+        from .verificar import FALLO, verificar
+
+        print("[Agente_YT] Diagnostico de configuracion:\n")
+        chequeos = verificar(cfg)
+        for c in chequeos:
+            print(f"  [{c.estado:8s}] {c.nombre:12s} {c.detalle}")
+        hay_fallo = any(c.estado == FALLO for c in chequeos)
+        print(
+            "\n[Agente_YT] "
+            + ("Hay componentes con FALLO (revisa arriba)." if hay_fallo
+               else "Sin fallos criticos.")
+        )
+        return 1 if hay_fallo else 0
 
     # Utilidades de descubrimiento de Higgsfield (no gastan creditos).
     if args.listar_motions or args.listar_styles:
