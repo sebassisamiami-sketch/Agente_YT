@@ -47,6 +47,32 @@ Genera en `salidas/`:
 - `guion.json` — el guion completo (nodo 2).
 - `prompts.json` — el JSON validado de prompts visuales en inglés (nodo 3).
 
+## Comprobar la configuración (`--verificar`)
+
+Antes de gastar créditos, comprueba qué está bien configurado (no genera nada ni
+publica; solo hace lecturas):
+
+```bash
+python -m agente_yt --verificar
+```
+
+Muestra el estado de: **ffmpeg**, **LLM** (hace una llamada mínima), **Higgsfield**
+(lectura de estilos para validar la clave), **Voz/TTS** y **YouTube** (paquetes,
+`client_secrets` y token, sin abrir el navegador). Estados: `OK`, `AVISO`,
+`FALLO`, `OMITIDO`. Úsalo tras poner cada clave para confirmar que funciona.
+
+## Configurar las 3 claves (resumen)
+
+1. **LLM** (elige uno): `NVIDIA_API_KEY` (build.nvidia.com, gratis/barato) o
+   `ANTHROPIC_API_KEY` o `OPENAI_API_KEY`. Pon `AGENTE_YT_LLM_PROVIDER` acorde.
+2. **Higgsfield**: `HIGGSFIELD_API_KEY` + `HIGGSFIELD_SECRET` desde
+   https://cloud.higgsfield.ai/api-keys (genera imágenes/vídeo; consume créditos).
+3. **YouTube** (solo para subir): OAuth de "App de escritorio" en Google Cloud con
+   "YouTube Data API v3"; descarga el `client_secrets.json` y apunta
+   `AGENTE_YT_YT_CLIENT_SECRETS`.
+
+Tras cada paso: `python -m agente_yt --verificar`.
+
 ## Usar un LLM real (Claude, GPT o NVIDIA)
 
 1. Copia `.env.example` a `.env`.
