@@ -86,9 +86,37 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Genera voz (TTS) desde las letras del guion y la usa como audio del montaje.",
     )
+    parser.add_argument(
+        "--subtitulos",
+        action="store_true",
+        help="Genera subtitulos (SRT) y los QUEMA en el video.",
+    )
+    parser.add_argument(
+        "--srt",
+        action="store_true",
+        help="Genera solo el archivo de subtitulos (SRT), sin quemarlos.",
+    )
+    parser.add_argument(
+        "--musica", metavar="ARCHIVO", help="Musica de fondo (se mezcla bajo la voz)."
+    )
+    parser.add_argument(
+        "--volumen-musica",
+        type=float,
+        default=None,
+        help="Volumen de la musica de fondo 0.0-1.0 (por defecto 0.18).",
+    )
+    parser.add_argument(
+        "--lote",
+        metavar="ARCHIVO",
+        help="Modo lote: genera un video por cada linea del archivo de temas.",
+    )
     args = parser.parse_args(argv)
 
     cfg = Config.from_env()
+    if args.volumen_musica is not None:
+        import dataclasses
+
+        cfg = dataclasses.replace(cfg, volumen_musica=args.volumen_musica)
 
     # Utilidades de descubrimiento de Higgsfield (no gastan creditos).
     if args.listar_motions or args.listar_styles:
@@ -118,6 +146,8 @@ def main(argv: list[str] | None = None) -> int:
                 audio=args.audio,
                 duracion_imagen=args.duracion_imagen,
                 con_zoom=not args.sin_zoom,
+                musica=args.musica or (cfg.musica or None),
+                volumen_musica=cfg.volumen_musica,
             )
         except MontajeError as exc:
             print(f"[Agente_YT] ERROR de montaje: {exc}", file=sys.stderr)
@@ -125,16 +155,49 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[Agente_YT] Video final generado: {ruta}")
         return 0
 
-    if not args.tema:
-        parser.error(
-            "se requiere el argumento 'tema' (o usa --listar-motions / "
-            "--listar-styles / --montar-dir)"
-        )
-
-    # --todo activa todas las fases (guion -> Higgsfield -> voz -> montaje).
+    # Flags derivados (compartidos por modo normal y lote).
     generar_video = args.generar_video or args.todo
     montar = args.todo
     narrar = args.narrar or args.todo
+    quemar_subtitulos = args.subtitulos or args.todo
+    subtitular = quemar_subtitulos or args.srt
+
+    # Modo lote: genera un video por cada tema del archivo.
+    if args.lote:
+        from .lote import ejecutar_lote
+
+        try:
+            items = ejecutar_lote(
+                args.lote,
+                cfg=cfg,
+                generar_video=generar_video,
+                montar=montar,
+                narrar=narrar,
+                subtitular=subtitular,
+                quemar_subtitulos=quemar_subtitulos,
+                musica=args.musica,
+            )
+        except Exception as exc:  # noqa: BLE001
+            print(f"[Agente_YT] ERROR de lote: {exc}", file=sys.stderr)
+            return 1
+        print(f"\n===== MODO LOTE: {len(items)} video(s) =====")
+        fallos = 0
+        for it in items:
+            if it.error:
+                fallos += 1
+                print(f"  [ERROR] {it.item.tema}: {it.error}")
+            else:
+                video = it.resultado.ruta_video if it.resultado else None
+                print(f"  [OK] {it.item.tema} -> {it.carpeta}"
+                      + (f" (video: {video})" if video else " (guion+prompts)"))
+        print(f"\n[Agente_YT] Lote completado. Fallos: {fallos}/{len(items)}.")
+        return 1 if fallos == len(items) else 0
+
+    if not args.tema:
+        parser.error(
+            "se requiere el argumento 'tema' (o usa --listar-motions / "
+            "--listar-styles / --montar-dir / --lote)"
+        )
 
     print(f"[Agente_YT] Proveedor LLM: {cfg.provider} | modelo: {cfg.model}")
     if args.todo:
@@ -154,6 +217,9 @@ def main(argv: list[str] | None = None) -> int:
             montar=montar,
             audio=args.audio,
             narrar=narrar,
+            subtitular=subtitular,
+            quemar_subtitulos=quemar_subtitulos,
+            musica=args.musica,
         )
     except Exception as exc:  # noqa: BLE001 - queremos un mensaje claro en CLI
         print(f"[Agente_YT] ERROR: {exc}", file=sys.stderr)
@@ -184,6 +250,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[Agente_YT] Voz generada: {res.ruta_voz}")
         if res.voz_nota:
             print(f"[Agente_YT] {res.voz_nota}")
+
+    if subtitular and res.ruta_srt:
+        print("\n===== NODO 9: SUBTITULOS =====")
+        print(f"[Agente_YT] SRT generado: {res.ruta_srt}"
+              + (" (se quemaran en el video)" if quemar_subtitulos else ""))
 
     if montar:
         print("\n===== NODO 7: MONTAJE DEL VIDEO FINAL =====")
