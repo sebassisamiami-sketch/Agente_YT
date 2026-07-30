@@ -58,6 +58,11 @@ class Config:
     yt_privacy: str
     yt_category: str
 
+    # --- Intro / outro (nodo 13) ---
+    outro_texto: str
+    intro_dur: float
+    outro_dur: float
+
     # --- Salida ---
     output_dir: Path
     formula_path: Path
@@ -107,6 +112,11 @@ class Config:
             yt_token=os.getenv("AGENTE_YT_YT_TOKEN", "youtube_token.json").strip(),
             yt_privacy=os.getenv("AGENTE_YT_YT_PRIVACY", "unlisted").strip().lower(),
             yt_category=os.getenv("AGENTE_YT_YT_CATEGORY", "22").strip(),
+            outro_texto=os.getenv(
+                "AGENTE_YT_OUTRO_TEXTO", "Gracias por ver. Suscribete!"
+            ).strip(),
+            intro_dur=float(os.getenv("AGENTE_YT_INTRO_DUR", "3")),
+            outro_dur=float(os.getenv("AGENTE_YT_OUTRO_DUR", "3")),
             output_dir=output_dir,
             formula_path=ROOT_DIR / "config" / "formula_cocomelon.md",
         )

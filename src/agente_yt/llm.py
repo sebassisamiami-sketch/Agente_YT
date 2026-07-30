@@ -122,16 +122,33 @@ class MockClient(LLMClient):
     """
 
     def complete(self, system: str, user: str) -> str:
-        # El Nodo 3 es el unico que pide "STRICT JSON"; usamos ese marcador para
-        # no confundirlo con el Nodo 2 (cuya formula menciona la palabra "JSON").
-        pide_json = "strict json" in system.lower()
-        if pide_json:
+        s = system.lower()
+        # El Nodo 12 pide "youtube metadata"; el Nodo 3 pide "strict json".
+        if "youtube metadata" in s:
+            return self._mock_metadatos(user)
+        if "strict json" in s:
             return self._mock_json(user)
         return self._mock_guion(user)
 
+    def _mock_metadatos(self, user: str) -> str:
+        tema = self._extraer_tema(user) or "video infantil"
+        return json.dumps(
+            {
+                "titulo": f"{tema} | Cancion infantil educativa",
+                "descripcion": (
+                    f"Cancion infantil sobre {tema}. Aprende y canta con nosotros. "
+                    "Suscribete para mas videos educativos para ninos."
+                ),
+                "tags": [tema, "cancion infantil", "educativo", "ninos", "aprender"],
+                "hashtags": ["#infantil", "#canciones", "#ninos"],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
     @staticmethod
     def _extraer_tema(user: str) -> str:
-        m = re.search(r"IDEA BASE:\s*(.+)", user)
+        m = re.search(r"(?:IDEA BASE|TOPIC):\s*(.+)", user)
         if m:
             return m.group(1).strip().splitlines()[0]
         return "tema infantil"

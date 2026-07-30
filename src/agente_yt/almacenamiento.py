@@ -10,7 +10,7 @@ import csv
 import json
 from pathlib import Path
 
-from .schemas import Guion, GuionVisual, ResultadoEscena
+from .schemas import Guion, GuionVisual, Metadatos, ResultadoEscena
 
 
 def _asegurar_dir(output_dir: Path) -> None:
@@ -33,6 +33,14 @@ def guardar_prompts(guion_visual: GuionVisual, output_dir: Path) -> Path:
     ruta.write_text(
         guion_visual.model_dump_json(indent=2, exclude_none=True), encoding="utf-8"
     )
+    return ruta
+
+
+def guardar_metadatos(meta: Metadatos, output_dir: Path) -> Path:
+    """Guarda los metadatos SEO del video (Nodo 12)."""
+    _asegurar_dir(output_dir)
+    ruta = output_dir / "metadatos.json"
+    ruta.write_text(meta.model_dump_json(indent=2), encoding="utf-8")
     return ruta
 
 
