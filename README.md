@@ -17,6 +17,7 @@ sin límites de plataforma.
 | 4. Iterador / Bucle | `iterador.py` | Recorre las escenas una a una | Activo |
 | 5. Higgsfield (imagen/vídeo) | `higgsfield.py` | Texto→imagen (Soul) y opcional imagen→vídeo (DoP) | Implementado (requiere claves) |
 | 6. Almacenamiento | `almacenamiento.py` | Guarda JSON y tabla final | Activo |
+| 7. Montaje final | `montaje.py` | Une imágenes/clips + audio en un MP4 (ffmpeg) | Activo y validado |
 
 > Los **nodos 1→3** están completos y **validados** en modo mock. El **nodo 5
 > (Higgsfield)** ya está implementado contra la API REST oficial, pero requiere
@@ -94,6 +95,31 @@ monetización requieren mucho trabajo. Esta herramienta automatiza la parte
 técnica (guion + prompts), pero el montaje final, la voz/música y la estrategia
 de canal siguen siendo tuyos. Además, generar los clips en Higgsfield **consume
 créditos de pago**.
+
+## Paso final: montaje del vídeo (nodo 7)
+
+El "Paso 5" que el vídeo de origen ni mostraba: ensamblar los clips/imágenes +
+la voz o música en el vídeo final listo para subir. Usa **ffmpeg**.
+
+Monta todos los medios de una carpeta (ordenados por nombre de archivo), con una
+pista de audio opcional:
+
+```bash
+python -m agente_yt --montar-dir ./mis_clips \
+    --audio ./cancion.mp3 \
+    --salida ./salidas/video_final.mp4 \
+    --duracion-imagen 5      # segundos por imagen fija
+```
+
+- Las **imágenes** fijas reciben un suave efecto Ken Burns (zoom lento); desactívalo
+  con `--sin-zoom`.
+- Todo se normaliza a `AGENTE_YT_VIDEO_SIZE` (1920x1080 por defecto) y
+  `AGENTE_YT_VIDEO_FPS` (30), y se exporta como MP4 H.264 + AAC.
+- ffmpeg se busca en `AGENTE_YT_FFMPEG`, luego en el PATH y, como último recurso,
+  el que trae el paquete opcional `imageio-ffmpeg` (`pip install imageio-ffmpeg`).
+
+Programáticamente también puedes montar directamente desde los resultados del
+nodo 5 con `montaje.montar_desde_resultados(...)`.
 
 ## Personalización
 

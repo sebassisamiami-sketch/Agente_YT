@@ -7,6 +7,8 @@ Opciones:
     --idioma es|en|pt      Idioma de la letra del guion (por defecto: es)
     --duracion 90          Duracion objetivo en segundos
     --generar-video        Ejecuta tambien la fase 2 (Nodo 5: Higgsfield)
+    --todo                 TODO EN UNO: guion -> Higgsfield -> montaje final
+    --audio ARCHIVO        Pista de audio para el montaje (con --todo o --montar-dir)
 """
 
 from __future__ import annotations
@@ -39,6 +41,32 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Lista los estilos Soul de Higgsfield y sale.",
     )
+    # --- Nodo 7: montaje ---
+    parser.add_argument(
+        "--montar-dir",
+        metavar="CARPETA",
+        help="Nodo 7: monta los medios (imagenes/videos) de la carpeta en un MP4 y sale.",
+    )
+    parser.add_argument(
+        "--audio", metavar="ARCHIVO", help="Pista de audio (voz/cancion) para el montaje."
+    )
+    parser.add_argument(
+        "--salida",
+        metavar="ARCHIVO",
+        default=None,
+        help="Ruta del video final (por defecto: salidas/video_final.mp4).",
+    )
+    parser.add_argument(
+        "--duracion-imagen",
+        type=float,
+        default=None,
+        help="Segundos por imagen fija en el montaje (por defecto AGENTE_YT_IMG_DURATION).",
+    )
+    parser.add_argument(
+        "--sin-zoom",
+        action="store_true",
+        help="Desactiva el efecto Ken Burns (zoom) en las imagenes.",
+    )
     parser.add_argument("--idioma", default="es", help="Idioma de la letra (es/en/pt).")
     parser.add_argument(
         "--duracion", type=int, default=90, help="Duracion objetivo en segundos."
@@ -47,6 +75,11 @@ def main(argv: list[str] | None = None) -> int:
         "--generar-video",
         action="store_true",
         help="Ejecuta la fase 2 (Higgsfield). Requiere credenciales.",
+    )
+    parser.add_argument(
+        "--todo",
+        action="store_true",
+        help="TODO EN UNO: guion -> prompts -> Higgsfield -> montaje del video final.",
     )
     args = parser.parse_args(argv)
 
@@ -67,10 +100,40 @@ def main(argv: list[str] | None = None) -> int:
         print(_json.dumps(datos, indent=2, ensure_ascii=False))
         return 0
 
+    # Nodo 7: montaje desde una carpeta de medios (no toca los LLM).
+    if args.montar_dir:
+        from .montaje import MontajeError, montar_directorio
+
+        salida = args.salida or str(cfg.output_dir / "video_final.mp4")
+        try:
+            ruta = montar_directorio(
+                args.montar_dir,
+                salida,
+                cfg,
+                audio=args.audio,
+                duracion_imagen=args.duracion_imagen,
+                con_zoom=not args.sin_zoom,
+            )
+        except MontajeError as exc:
+            print(f"[Agente_YT] ERROR de montaje: {exc}", file=sys.stderr)
+            return 1
+        print(f"[Agente_YT] Video final generado: {ruta}")
+        return 0
+
     if not args.tema:
-        parser.error("se requiere el argumento 'tema' (o usa --listar-motions/--listar-styles)")
+        parser.error(
+            "se requiere el argumento 'tema' (o usa --listar-motions / "
+            "--listar-styles / --montar-dir)"
+        )
+
+    # --todo activa las tres fases (guion -> Higgsfield -> montaje).
+    generar_video = args.generar_video or args.todo
+    montar = args.todo
 
     print(f"[Agente_YT] Proveedor LLM: {cfg.provider} | modelo: {cfg.model}")
+    if args.todo:
+        estado_hf = "SI" if cfg.higgsfield_configurado else "NO (faltan claves)"
+        print(f"[Agente_YT] Modo TODO EN UNO | Higgsfield configurado: {estado_hf}")
 
     try:
         res = ejecutar(
@@ -78,7 +141,9 @@ def main(argv: list[str] | None = None) -> int:
             cfg=cfg,
             idioma=args.idioma,
             duracion_seg=args.duracion,
-            generar_video=args.generar_video,
+            generar_video=generar_video,
+            montar=montar,
+            audio=args.audio,
         )
     except Exception as exc:  # noqa: BLE001 - queremos un mensaje claro en CLI
         print(f"[Agente_YT] ERROR: {exc}", file=sys.stderr)
@@ -92,7 +157,7 @@ def main(argv: list[str] | None = None) -> int:
     print(res.guion_visual.model_dump_json(indent=2))
     print(f"\n[guardado] {res.ruta_prompts}")
 
-    if args.generar_video:
+    if generar_video:
         print("\n===== NODOS 4-6: GENERACION Y TABLA FINAL =====")
         for r in res.resultados:
             print(
@@ -103,7 +168,14 @@ def main(argv: list[str] | None = None) -> int:
         if res.ruta_tabla:
             print(f"\n[guardado] {res.ruta_tabla}")
 
-    print("\n[Agente_YT] Pipeline (fase 1) completado con exito.")
+    if montar:
+        print("\n===== NODO 7: MONTAJE DEL VIDEO FINAL =====")
+        if res.ruta_video:
+            print(f"[Agente_YT] Video final generado: {res.ruta_video}")
+        else:
+            print(f"[Agente_YT] {res.montaje_nota}")
+
+    print("\n[Agente_YT] Pipeline completado.")
     return 0
 
 
