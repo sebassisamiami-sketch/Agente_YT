@@ -149,13 +149,18 @@ def montar(
     musica: Path | str | None = None,
     volumen_musica: float = 0.18,
     subtitulos_srt: Path | str | None = None,
+    intro: Path | str | None = None,
+    outro: Path | str | None = None,
 ) -> Path:
     """Ensambla los clips en un MP4 final.
 
     - `audio`: pista principal (voz/narracion).
     - `musica`: musica de fondo (se repite en bucle y se mezcla a bajo volumen
       bajo la voz).
-    - `subtitulos_srt`: si se da, se queman los subtitulos en el video.
+    - `subtitulos_srt`: si se da, se queman los subtitulos en el video (alineados
+      a las escenas, antes de anteponer la intro).
+    - `intro`/`outro`: clips que se anteponen/anaden. La voz se retrasa por la
+      duracion de la intro para seguir alineada con las escenas.
     """
     if not clips:
         raise MontajeError("No hay clips para montar.")
@@ -187,45 +192,66 @@ def montar(
                 )
             segmentos.append(seg)
 
-        # Concatenar (demuxer). Todos los segmentos comparten codec/params.
-        lista = tmpdir / "lista.txt"
-        lista.write_text(
-            "".join(f"file '{s.as_posix()}'\n" for s in segmentos), encoding="utf-8"
-        )
-        video_mudo = tmpdir / "video_mudo.mp4"
-        _run([
-            ff, "-y", "-f", "concat", "-safe", "0", "-i", str(lista),
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(cfg.video_fps),
-            str(video_mudo),
-        ])
+        # 1) Concatenar las ESCENAS (demuxer). Comparten codec/params.
+        video_escenas = _concat(ff, segmentos, tmpdir / "escenas.mp4", cfg)
 
-        # (Opcional) Quemar subtitulos: re-codifica el video con el filtro subtitles.
-        video_base = video_mudo
+        # 2) (Opcional) Quemar subtitulos SOBRE LAS ESCENAS (alineados desde 0).
         if subtitulos_srt:
             srt = Path(subtitulos_srt)
             if not srt.exists():
                 raise MontajeError(f"No existe el SRT: {srt}")
-            # Copiar el srt al tmpdir con nombre simple para evitar escapes raros.
-            srt_local = tmpdir / "subs.srt"
-            shutil.copyfile(srt, srt_local)
-            video_sub = tmpdir / "video_sub.mp4"
+            shutil.copyfile(srt, tmpdir / "subs.srt")
+            video_sub = tmpdir / "escenas_sub.mp4"
             estilo = (
                 "FontSize=22,Alignment=2,MarginV=40,PrimaryColour=&H00FFFFFF,"
                 "OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,Bold=1"
             )
             _run([
-                ff, "-y", "-i", str(video_mudo),
+                ff, "-y", "-i", str(video_escenas),
                 "-vf", f"subtitles=subs.srt:force_style='{estilo}'",
                 "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(cfg.video_fps),
                 str(video_sub),
             ], cwd=str(tmpdir))
-            video_base = video_sub
+            video_escenas = video_sub
 
-        # Mezclar audio (voz y/o musica); si no hay ninguno, video sin sonido.
-        _muxear_audio(
-            ff, video_base, salida, audio, musica, volumen_musica
+        # 3) Anteponer intro y anadir outro (normalizados como video).
+        retraso_voz = 0.0
+        partes = [video_escenas]
+        if intro:
+            intro_seg = tmpdir / "intro_seg.mp4"
+            _segmento_desde_video(ff, Path(intro), intro_seg, cfg)
+            retraso_voz = _duracion_media(ff, intro_seg)
+            partes.insert(0, intro_seg)
+        if outro:
+            outro_seg = tmpdir / "outro_seg.mp4"
+            _segmento_desde_video(ff, Path(outro), outro_seg, cfg)
+            partes.append(outro_seg)
+        video_base = (
+            _concat(ff, partes, tmpdir / "completo.mp4", cfg)
+            if len(partes) > 1
+            else video_escenas
         )
 
+        # 4) Mezclar audio (voz retrasada por la intro y/o musica de fondo).
+        _muxear_audio(
+            ff, video_base, salida, audio, musica, volumen_musica,
+            retraso_voz=retraso_voz,
+        )
+
+    return salida
+
+
+def _concat(ff: str, segmentos: list[Path], salida: Path, cfg: Config) -> Path:
+    """Concatena segmentos (mismo codec) con el demuxer de ffmpeg."""
+    lista = salida.with_suffix(".txt")
+    lista.write_text(
+        "".join(f"file '{s.as_posix()}'\n" for s in segmentos), encoding="utf-8"
+    )
+    _run([
+        ff, "-y", "-f", "concat", "-safe", "0", "-i", str(lista),
+        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(cfg.video_fps),
+        str(salida),
+    ])
     return salida
 
 
@@ -249,6 +275,7 @@ def _muxear_audio(
     voz: Path | str | None,
     musica: Path | str | None,
     volumen_musica: float,
+    retraso_voz: float = 0.0,
 ) -> None:
     """Combina el video con voz y/o musica de fondo.
 
@@ -272,13 +299,16 @@ def _muxear_audio(
     # Duracion del video: limitamos la salida con -t (robusto ante fuentes
     # infinitas como apad o -stream_loop -1, que colgarian con -shortest).
     dur = f"{_duracion_media(ff, video):.3f}"
+    # Retraso de la voz (ms) para que empiece tras la intro.
+    ms = max(0, int(round(retraso_voz * 1000)))
+    voz_pre = f"adelay={ms}|{ms}," if ms > 0 else ""
 
     if voz_path and mus_path:
         cmd = [
             ff, "-y", "-i", str(video), "-i", str(voz_path),
             "-stream_loop", "-1", "-i", str(mus_path),
             "-filter_complex",
-            f"[1:a]volume=1,apad[voz];[2:a]volume={vm}[mus];"
+            f"[1:a]{voz_pre}volume=1,apad[voz];[2:a]volume={vm}[mus];"
             f"[voz][mus]amix=inputs=2:duration=longest:dropout_transition=0[a]",
             "-map", "0:v:0", "-map", "[a]",
             "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", dur, str(salida),
@@ -286,7 +316,7 @@ def _muxear_audio(
     elif voz_path:
         cmd = [
             ff, "-y", "-i", str(video), "-i", str(voz_path),
-            "-filter_complex", "[1:a]apad[a]",
+            "-filter_complex", f"[1:a]{voz_pre}apad[a]",
             "-map", "0:v:0", "-map", "[a]",
             "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", dur, str(salida),
         ]
@@ -340,6 +370,8 @@ def montar_desde_resultados(
     musica: Path | str | None = None,
     volumen_musica: float = 0.18,
     subtitulos_srt: Path | str | None = None,
+    intro: Path | str | None = None,
+    outro: Path | str | None = None,
 ) -> Path:
     """Monta a partir de los ResultadoEscena del Nodo 5 (usa video o imagen)."""
     dur = duracion_imagen if duracion_imagen is not None else cfg.img_duration
@@ -356,4 +388,5 @@ def montar_desde_resultados(
     return montar(
         clips, salida, cfg, audio=audio, musica=musica,
         volumen_musica=volumen_musica, subtitulos_srt=subtitulos_srt,
+        intro=intro, outro=outro,
     )

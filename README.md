@@ -22,6 +22,8 @@ sin límites de plataforma.
 | 9. Subtítulos | `subtitulos.py` | Genera SRT desde las letras (opcionalmente quemado) | Activo y validado |
 | 10. Miniatura | `thumbnail.py` | Thumbnail 1280x720 con el título (libass) | Activo y validado |
 | 11. Subida YouTube | `youtube.py` | Publica el vídeo vía Data API v3 (OAuth) | Implementado (requiere OAuth) |
+| 12. Metadatos SEO | `metadatos.py` | Título, descripción, tags y hashtags con el LLM | Activo y validado |
+| 13. Intro / Outro | `intro_outro.py` | Portada y cierre animados (libass + fade) | Activo y validado |
 
 > Los **nodos 1→3** están completos y **validados** en modo mock. El **nodo 5
 > (Higgsfield)** ya está implementado contra la API REST oficial, pero requiere
@@ -236,16 +238,38 @@ una API key):
 > se generó. Por seguridad, `--todo` **no** sube solo: subir siempre es explícito
 > con `--subir`.
 
+## Metadatos SEO (nodo 12)
+
+Genera con el LLM un **título optimizado, descripción, tags y hashtags** a partir
+del guion, y los usa al subir a YouTube (o los guarda en `salidas/metadatos.json`):
+
+```bash
+python -m agente_yt "Cancion de los colores" --metadatos
+```
+
+## Intro / outro animados (nodo 13)
+
+Añade una **portada** (con el título) y un **cierre** (llamada a suscribirse) con
+fundidos. Los subtítulos y la voz se re-sincronizan automáticamente con las
+escenas (la voz se retrasa por la duración de la intro):
+
+```bash
+python -m agente_yt "Cancion de los colores" --todo --intro-outro
+```
+El texto del cierre y las duraciones se configuran con `AGENTE_YT_OUTRO_TEXTO`,
+`AGENTE_YT_INTRO_DUR` y `AGENTE_YT_OUTRO_DUR`.
+
 ## Todo en uno
 
 ```bash
 python -m agente_yt "Cancion de los colores para ninos" --todo
 ```
 
-Encadena: guion → prompts → Higgsfield (imagen/vídeo) → voz (TTS) → **subtítulos**
-→ montaje final (subtítulos quemados) → **miniatura**. Cada etapa informa su
-estado; si faltan credenciales de Higgsfield, avisa y no gasta créditos. Añade
-`--subir` para publicar en YouTube.
+Encadena: guion → **metadatos SEO** → prompts → Higgsfield (imagen/vídeo) → voz
+(TTS) → subtítulos → **intro/outro** → montaje final (subtítulos quemados) →
+**miniatura**. Cada etapa informa su estado; si faltan credenciales de Higgsfield,
+avisa y no gasta créditos. Añade `--subir` para publicar en YouTube con los
+metadatos generados.
 
 ## Personalización
 

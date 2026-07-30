@@ -13,14 +13,16 @@ Arquitectura (cada nodo = un modulo con una unica responsabilidad):
     Nodo 9  subtitulos.py         -> Subtitulos SRT (opcionalmente quemados)
     Nodo 10 thumbnail.py          -> Miniatura/thumbnail 1280x720 con titulo
     Nodo 11 youtube.py            -> Subida del video a YouTube (Data API v3)
+    Nodo 12 metadatos.py          -> Metadatos SEO (titulo/descripcion/tags) con LLM
+    Nodo 13 intro_outro.py        -> Portada (intro) y cierre (outro) animados
 
 El orquestador (pipeline.py) conecta 1 -> 2 -> 3, que es lo que se valida
 primero segun el consejo de construir por fases. El nodo 5 requiere credenciales
-de Higgsfield, el nodo 7 usa ffmpeg (montaje, musica y quemado de subtitulos),
-el nodo 8 sintetiza la voz, el nodo 9 genera los subtitulos, el nodo 10 crea la
-miniatura y el nodo 11 sube a YouTube (OAuth). El comando `--todo` encadena las
-fases (incluida la miniatura); `--subir` publica en YouTube; `--lote` (lote.py)
-produce varios videos desde un archivo de temas.
+de Higgsfield, el nodo 7 usa ffmpeg (montaje, musica, quemado de subtitulos e
+intro/outro), el nodo 8 sintetiza la voz, el 9 los subtitulos, el 10 la miniatura,
+el 11 sube a YouTube (OAuth), el 12 genera metadatos SEO con el LLM y el 13 crea
+la portada y el cierre. `--todo` encadena las fases; `--subir` publica en YouTube;
+`--lote` (lote.py) produce varios videos desde un archivo de temas.
 """
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
