@@ -41,6 +41,11 @@ class Config:
     video_fps: int
     img_duration: float
 
+    # --- Voz / TTS (nodo 8) ---
+    tts_provider: str
+    tts_voice: str
+    tts_model: str
+
     # --- Salida ---
     output_dir: Path
     formula_path: Path
@@ -76,6 +81,9 @@ class Config:
             video_size=os.getenv("AGENTE_YT_VIDEO_SIZE", "1920x1080").strip(),
             video_fps=int(os.getenv("AGENTE_YT_VIDEO_FPS", "30")),
             img_duration=float(os.getenv("AGENTE_YT_IMG_DURATION", "5")),
+            tts_provider=os.getenv("AGENTE_YT_TTS_PROVIDER", "mock").strip().lower(),
+            tts_voice=os.getenv("AGENTE_YT_TTS_VOICE", "").strip(),
+            tts_model=os.getenv("AGENTE_YT_TTS_MODEL", "tts-1").strip(),
             output_dir=output_dir,
             formula_path=ROOT_DIR / "config" / "formula_cocomelon.md",
         )
