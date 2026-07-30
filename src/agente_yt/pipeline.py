@@ -22,6 +22,7 @@ from . import (
     iterador,
     montaje,
     prompts_visuales,
+    subtitulos,
     voz,
 )
 from .config import Config
@@ -39,6 +40,7 @@ class ResultadoPipeline:
     ruta_tabla: Path | None = None
     ruta_video: Path | None = None
     ruta_voz: Path | None = None
+    ruta_srt: Path | None = None
     montaje_nota: str = ""  # aviso legible si el montaje no se pudo hacer
     voz_nota: str = ""  # aviso legible si la narracion no se pudo generar
 
@@ -53,6 +55,9 @@ def ejecutar(
     montar: bool = False,
     audio: str | None = None,
     narrar: bool = False,
+    subtitular: bool = False,
+    quemar_subtitulos: bool = False,
+    musica: str | None = None,
 ) -> ResultadoPipeline:
     cfg = cfg or Config.from_env()
     client = build_client(cfg)
@@ -96,17 +101,40 @@ def ejecutar(
             except voz.VozError as exc:
                 resultado.voz_nota = f"No se pudo generar la voz: {exc}"
 
+    # --- Nodo 9 (opcional): subtitulos SRT desde las letras del guion ---
+    srt_para_quemar: Path | None = None
+    if subtitular or quemar_subtitulos:
+        try:
+            resultado.ruta_srt = subtitulos.generar_srt(
+                guion_visual, cfg.output_dir / "subtitulos", cfg
+            )
+            if quemar_subtitulos:
+                srt_para_quemar = resultado.ruta_srt
+        except ValueError as exc:
+            resultado.montaje_nota = f"No se generaron subtitulos: {exc}"
+
     # --- Fase 3 (opcional): montaje del video final (Nodo 7) ---
+    musica_final = musica if musica is not None else (cfg.musica or None)
     if montar:
-        resultado.ruta_video, resultado.montaje_nota = _intentar_montaje(
-            resultado.resultados, cfg, audio_final
+        resultado.ruta_video, nota = _intentar_montaje(
+            resultado.resultados,
+            cfg,
+            audio_final,
+            musica=musica_final,
+            subtitulos_srt=srt_para_quemar,
         )
+        if nota:
+            resultado.montaje_nota = nota
 
     return resultado
 
 
 def _intentar_montaje(
-    resultados: list[ResultadoEscena], cfg: Config, audio: str | None
+    resultados: list[ResultadoEscena],
+    cfg: Config,
+    audio: str | None,
+    musica: str | None = None,
+    subtitulos_srt: Path | None = None,
 ) -> tuple[Path | None, str]:
     """Monta el video final si hay medios; si no, devuelve un aviso claro."""
     if not resultados:
@@ -122,7 +150,15 @@ def _intentar_montaje(
         )
     salida = cfg.output_dir / "video_final.mp4"
     try:
-        ruta = montaje.montar_desde_resultados(resultados, salida, cfg, audio=audio)
+        ruta = montaje.montar_desde_resultados(
+            resultados,
+            salida,
+            cfg,
+            audio=audio,
+            musica=musica,
+            volumen_musica=cfg.volumen_musica,
+            subtitulos_srt=subtitulos_srt,
+        )
         return ruta, ""
     except montaje.MontajeError as exc:
         return None, f"No se pudo montar el video: {exc}"
