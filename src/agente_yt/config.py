@@ -35,6 +35,12 @@ class Config:
     higgsfield_motion_id: str
     higgsfield_video_model: str
 
+    # --- Montaje (nodo 7) ---
+    ffmpeg_bin: str
+    video_size: str
+    video_fps: int
+    img_duration: float
+
     # --- Salida ---
     output_dir: Path
     formula_path: Path
@@ -66,6 +72,10 @@ class Config:
             higgsfield_video_model=os.getenv(
                 "HIGGSFIELD_VIDEO_MODEL", "dop-turbo"
             ).strip(),
+            ffmpeg_bin=os.getenv("AGENTE_YT_FFMPEG", "").strip(),
+            video_size=os.getenv("AGENTE_YT_VIDEO_SIZE", "1920x1080").strip(),
+            video_fps=int(os.getenv("AGENTE_YT_VIDEO_FPS", "30")),
+            img_duration=float(os.getenv("AGENTE_YT_IMG_DURATION", "5")),
             output_dir=output_dir,
             formula_path=ROOT_DIR / "config" / "formula_cocomelon.md",
         )

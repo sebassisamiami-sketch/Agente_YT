@@ -12,3 +12,7 @@ httpx>=0.27
 # Descomenta el que vayas a usar. El modo "mock" NO requiere ninguno.
 # anthropic>=0.40
 # openai>=1.40
+
+# --- Nodo 7: montaje (opcional) ---
+# Solo si NO tienes ffmpeg en el PATH: trae un binario estatico de ffmpeg.
+# imageio-ffmpeg>=0.5
