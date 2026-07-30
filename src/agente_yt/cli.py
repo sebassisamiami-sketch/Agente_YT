@@ -199,7 +199,9 @@ def main(argv: list[str] | None = None) -> int:
             "--listar-styles / --montar-dir / --lote)"
         )
 
-    print(f"[Agente_YT] Proveedor LLM: {cfg.provider} | modelo: {cfg.model}")
+    from .llm import _resolver_modelo
+
+    print(f"[Agente_YT] Proveedor LLM: {cfg.provider} | modelo: {_resolver_modelo(cfg)}")
     if args.todo:
         estado_hf = "SI" if cfg.higgsfield_configurado else "NO (faltan claves)"
         print(
