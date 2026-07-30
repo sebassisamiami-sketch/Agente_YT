@@ -43,17 +43,42 @@ Genera en `salidas/`:
 - `guion.json` — el guion completo (nodo 2).
 - `prompts.json` — el JSON validado de prompts visuales en inglés (nodo 3).
 
-## Usar un LLM real (Claude o GPT)
+## Usar un LLM real (Claude, GPT o NVIDIA)
 
 1. Copia `.env.example` a `.env`.
-2. Elige proveedor y pon tu clave:
+2. Elige proveedor y pon tu clave. Deja `AGENTE_YT_LLM_MODEL` vacío para usar el
+   modelo por defecto de cada proveedor.
    ```ini
-   AGENTE_YT_LLM_PROVIDER=anthropic      # o: openai
-   AGENTE_YT_LLM_MODEL=claude-3-5-sonnet-latest
+   # Claude
+   AGENTE_YT_LLM_PROVIDER=anthropic
    ANTHROPIC_API_KEY=sk-ant-...
+
+   # o GPT
+   AGENTE_YT_LLM_PROVIDER=openai
+   OPENAI_API_KEY=sk-...
+
+   # o NVIDIA (modelos abiertos via API compatible con OpenAI)
+   AGENTE_YT_LLM_PROVIDER=nvidia
+   NVIDIA_API_KEY=nvapi-...
+   # AGENTE_YT_LLM_MODEL=meta/llama-3.3-70b-instruct   # opcional
    ```
-3. Instala el SDK correspondiente: `pip install anthropic` (o `pip install openai`).
+3. Instala el SDK: `pip install anthropic` (Claude) o `pip install openai`
+   (GPT **y** NVIDIA, que comparten SDK).
 4. Ejecuta el mismo comando de arriba.
+
+### ¿Por qué NVIDIA?
+
+La API de NVIDIA (build.nvidia.com) sirve modelos abiertos potentes (Llama 3.3,
+Nemotron, DeepSeek, Qwen...) con un endpoint **compatible con OpenAI**. Es una
+forma de **estirar/abaratar tus tokens sin sacrificar calidad**: el pipeline usa
+exactamente el mismo código y contrato (incluido el JSON estricto del nodo 3),
+solo cambia la `base_url` y la clave. Modelos por defecto por proveedor:
+
+| Proveedor | Modelo por defecto |
+|-----------|--------------------|
+| `anthropic` | `claude-3-5-sonnet-latest` |
+| `openai` | `gpt-4o` |
+| `nvidia` | `meta/llama-3.3-70b-instruct` |
 
 ## Fase 2: generar imágenes/vídeo con Higgsfield (nodo 5)
 
