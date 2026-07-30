@@ -18,6 +18,7 @@ sin límites de plataforma.
 | 5. Higgsfield (imagen/vídeo) | `higgsfield.py` | Texto→imagen (Soul) y opcional imagen→vídeo (DoP) | Implementado (requiere claves) |
 | 6. Almacenamiento | `almacenamiento.py` | Guarda JSON y tabla final | Activo |
 | 7. Montaje final | `montaje.py` | Une imágenes/clips + audio en un MP4 (ffmpeg) | Activo y validado |
+| 8. Voz / Narración | `voz.py` | TTS de las letras del guion (edge/gTTS/openai/mock) | Activo y validado |
 
 > Los **nodos 1→3** están completos y **validados** en modo mock. El **nodo 5
 > (Higgsfield)** ya está implementado contra la API REST oficial, pero requiere
@@ -120,6 +121,40 @@ python -m agente_yt --montar-dir ./mis_clips \
 
 Programáticamente también puedes montar directamente desde los resultados del
 nodo 5 con `montaje.montar_desde_resultados(...)`.
+
+## Voz / narración (nodo 8)
+
+Narra automáticamente las **letras** del guion (no las indicaciones visuales) y
+usa esa pista como audio del montaje. Proveedores de TTS:
+
+- `mock` — offline, sin red ni clave (audio de placeholder para pruebas).
+- `edge` — **Microsoft Edge TTS, gratis y sin clave** (voz neuronal; `pip install edge-tts`).
+- `gtts` — Google Translate TTS, gratis y sin clave (`pip install gTTS`).
+- `openai` — OpenAI TTS (requiere `OPENAI_API_KEY`).
+
+```ini
+# en .env
+AGENTE_YT_TTS_PROVIDER=edge
+AGENTE_YT_TTS_VOICE=es-ES-AlvaroNeural   # opcional
+```
+
+```bash
+# genera la voz y móntala en el vídeo:
+python -m agente_yt "Cancion de los colores" --narrar
+```
+
+Con `--todo`, la narración se genera y se usa como audio del montaje
+automáticamente (salvo que pases un `--audio` explícito, que tiene prioridad).
+
+## Todo en uno
+
+```bash
+python -m agente_yt "Cancion de los colores para ninos" --todo
+```
+
+Encadena: guion → prompts → Higgsfield (imagen/vídeo) → voz (TTS) → montaje final.
+Cada etapa informa su estado; si faltan credenciales de Higgsfield, avisa y no
+gasta créditos.
 
 ## Personalización
 

@@ -16,3 +16,8 @@ httpx>=0.27
 # --- Nodo 7: montaje (opcional) ---
 # Solo si NO tienes ffmpeg en el PATH: trae un binario estatico de ffmpeg.
 # imageio-ffmpeg>=0.5
+
+# --- Nodo 8: voz / TTS (opcionales segun proveedor) ---
+# El modo "mock" NO requiere ninguno. Descomenta el que uses:
+# edge-tts>=6.1     # gratis, sin clave (recomendado)
+# gTTS>=2.5         # gratis, sin clave

@@ -22,6 +22,7 @@ from . import (
     iterador,
     montaje,
     prompts_visuales,
+    voz,
 )
 from .config import Config
 from .llm import build_client
@@ -37,7 +38,9 @@ class ResultadoPipeline:
     resultados: list[ResultadoEscena]
     ruta_tabla: Path | None = None
     ruta_video: Path | None = None
+    ruta_voz: Path | None = None
     montaje_nota: str = ""  # aviso legible si el montaje no se pudo hacer
+    voz_nota: str = ""  # aviso legible si la narracion no se pudo generar
 
 
 def ejecutar(
@@ -49,6 +52,7 @@ def ejecutar(
     generar_video: bool = False,
     montar: bool = False,
     audio: str | None = None,
+    narrar: bool = False,
 ) -> ResultadoPipeline:
     cfg = cfg or Config.from_env()
     client = build_client(cfg)
@@ -77,10 +81,25 @@ def ejecutar(
             resultado.resultados, cfg.output_dir
         )
 
+    # --- Nodo 8 (opcional): narracion de voz desde las letras del guion ---
+    audio_final = audio
+    if narrar:
+        if audio:
+            # Si el usuario ya aporto un audio explicito, no lo pisamos.
+            resultado.voz_nota = "Se uso el --audio proporcionado (no se narro)."
+        else:
+            try:
+                resultado.ruta_voz = voz.generar_voz_desde_guion(
+                    guion_visual, cfg.output_dir / "voz", cfg, idioma=idioma
+                )
+                audio_final = str(resultado.ruta_voz)
+            except voz.VozError as exc:
+                resultado.voz_nota = f"No se pudo generar la voz: {exc}"
+
     # --- Fase 3 (opcional): montaje del video final (Nodo 7) ---
     if montar:
         resultado.ruta_video, resultado.montaje_nota = _intentar_montaje(
-            resultado.resultados, cfg, audio
+            resultado.resultados, cfg, audio_final
         )
 
     return resultado
