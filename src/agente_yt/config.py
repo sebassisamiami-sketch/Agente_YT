@@ -52,6 +52,12 @@ class Config:
     musica: str
     volumen_musica: float
 
+    # --- YouTube (nodo 11) ---
+    yt_client_secrets: str
+    yt_token: str
+    yt_privacy: str
+    yt_category: str
+
     # --- Salida ---
     output_dir: Path
     formula_path: Path
@@ -97,6 +103,10 @@ class Config:
             tts_model=os.getenv("AGENTE_YT_TTS_MODEL", "tts-1").strip(),
             musica=os.getenv("AGENTE_YT_MUSICA", "").strip(),
             volumen_musica=float(os.getenv("AGENTE_YT_VOLUMEN_MUSICA", "0.18")),
+            yt_client_secrets=os.getenv("AGENTE_YT_YT_CLIENT_SECRETS", "").strip(),
+            yt_token=os.getenv("AGENTE_YT_YT_TOKEN", "youtube_token.json").strip(),
+            yt_privacy=os.getenv("AGENTE_YT_YT_PRIVACY", "unlisted").strip().lower(),
+            yt_category=os.getenv("AGENTE_YT_YT_CATEGORY", "22").strip(),
             output_dir=output_dir,
             formula_path=ROOT_DIR / "config" / "formula_cocomelon.md",
         )

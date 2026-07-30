@@ -110,6 +110,22 @@ def main(argv: list[str] | None = None) -> int:
         metavar="ARCHIVO",
         help="Modo lote: genera un video por cada linea del archivo de temas.",
     )
+    parser.add_argument(
+        "--miniatura",
+        action="store_true",
+        help="Genera una miniatura/thumbnail 1280x720 con el titulo (Nodo 10).",
+    )
+    parser.add_argument(
+        "--subir",
+        action="store_true",
+        help="Sube el video final a YouTube (Nodo 11; requiere OAuth configurado).",
+    )
+    parser.add_argument(
+        "--privacidad",
+        choices=["private", "unlisted", "public"],
+        default=None,
+        help="Privacidad del video subido (por defecto: unlisted).",
+    )
     args = parser.parse_args(argv)
 
     cfg = Config.from_env()
@@ -161,6 +177,8 @@ def main(argv: list[str] | None = None) -> int:
     narrar = args.narrar or args.todo
     quemar_subtitulos = args.subtitulos or args.todo
     subtitular = quemar_subtitulos or args.srt
+    miniatura = args.miniatura or args.todo  # --todo genera miniatura
+    subir = args.subir  # subir es SIEMPRE explicito (no lo activa --todo)
 
     # Modo lote: genera un video por cada tema del archivo.
     if args.lote:
@@ -176,6 +194,9 @@ def main(argv: list[str] | None = None) -> int:
                 subtitular=subtitular,
                 quemar_subtitulos=quemar_subtitulos,
                 musica=args.musica,
+                miniatura=miniatura,
+                subir=subir,
+                privacidad=args.privacidad,
             )
         except Exception as exc:  # noqa: BLE001
             print(f"[Agente_YT] ERROR de lote: {exc}", file=sys.stderr)
@@ -222,6 +243,9 @@ def main(argv: list[str] | None = None) -> int:
             subtitular=subtitular,
             quemar_subtitulos=quemar_subtitulos,
             musica=args.musica,
+            miniatura=miniatura,
+            subir=subir,
+            privacidad=args.privacidad,
         )
     except Exception as exc:  # noqa: BLE001 - queremos un mensaje claro en CLI
         print(f"[Agente_YT] ERROR: {exc}", file=sys.stderr)
@@ -264,6 +288,20 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[Agente_YT] Video final generado: {res.ruta_video}")
         else:
             print(f"[Agente_YT] {res.montaje_nota}")
+
+    if miniatura:
+        print("\n===== NODO 10: MINIATURA / THUMBNAIL =====")
+        if res.ruta_miniatura:
+            print(f"[Agente_YT] Miniatura generada: {res.ruta_miniatura}")
+        else:
+            print(f"[Agente_YT] {res.miniatura_nota}")
+
+    if subir:
+        print("\n===== NODO 11: SUBIDA A YOUTUBE =====")
+        if res.youtube_url:
+            print(f"[Agente_YT] Video publicado: {res.youtube_url}")
+        else:
+            print(f"[Agente_YT] {res.youtube_nota}")
 
     print("\n[Agente_YT] Pipeline completado.")
     return 0

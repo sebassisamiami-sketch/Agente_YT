@@ -23,7 +23,9 @@ from . import (
     montaje,
     prompts_visuales,
     subtitulos,
+    thumbnail,
     voz,
+    youtube,
 )
 from .config import Config
 from .llm import build_client
@@ -41,8 +43,12 @@ class ResultadoPipeline:
     ruta_video: Path | None = None
     ruta_voz: Path | None = None
     ruta_srt: Path | None = None
+    ruta_miniatura: Path | None = None
+    youtube_url: str = ""
     montaje_nota: str = ""  # aviso legible si el montaje no se pudo hacer
     voz_nota: str = ""  # aviso legible si la narracion no se pudo generar
+    miniatura_nota: str = ""
+    youtube_nota: str = ""
 
 
 def ejecutar(
@@ -58,6 +64,9 @@ def ejecutar(
     subtitular: bool = False,
     quemar_subtitulos: bool = False,
     musica: str | None = None,
+    miniatura: bool = False,
+    subir: bool = False,
+    privacidad: str | None = None,
 ) -> ResultadoPipeline:
     cfg = cfg or Config.from_env()
     client = build_client(cfg)
@@ -125,6 +134,38 @@ def ejecutar(
         )
         if nota:
             resultado.montaje_nota = nota
+
+    # --- Nodo 10 (opcional): miniatura / thumbnail ---
+    if miniatura:
+        try:
+            resultado.ruta_miniatura = thumbnail.generar_miniatura_auto(
+                resultado.resultados,
+                resultado.ruta_video,
+                tema,
+                cfg.output_dir / "miniatura",
+                cfg,
+            )
+        except montaje.MontajeError as exc:
+            resultado.miniatura_nota = f"No se genero la miniatura: {exc}"
+
+    # --- Nodo 11 (opcional): subida a YouTube ---
+    if subir:
+        if not resultado.ruta_video:
+            resultado.youtube_nota = (
+                "No se subio a YouTube: no hay video final (falta Higgsfield/montaje)."
+            )
+        else:
+            try:
+                resultado.youtube_url = youtube.subir_a_youtube(
+                    resultado.ruta_video,
+                    titulo=tema,
+                    descripcion=guion.texto,
+                    cfg=cfg,
+                    miniatura=resultado.ruta_miniatura,
+                    privacidad=privacidad,
+                )
+            except youtube.YouTubeError as exc:
+                resultado.youtube_nota = f"No se pudo subir a YouTube: {exc}"
 
     return resultado
 
