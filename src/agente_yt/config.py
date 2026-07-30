@@ -46,6 +46,10 @@ class Config:
     tts_voice: str
     tts_model: str
 
+    # --- Musica de fondo / subtitulos (nodos 7 y 9) ---
+    musica: str
+    volumen_musica: float
+
     # --- Salida ---
     output_dir: Path
     formula_path: Path
@@ -84,6 +88,8 @@ class Config:
             tts_provider=os.getenv("AGENTE_YT_TTS_PROVIDER", "mock").strip().lower(),
             tts_voice=os.getenv("AGENTE_YT_TTS_VOICE", "").strip(),
             tts_model=os.getenv("AGENTE_YT_TTS_MODEL", "tts-1").strip(),
+            musica=os.getenv("AGENTE_YT_MUSICA", "").strip(),
+            volumen_musica=float(os.getenv("AGENTE_YT_VOLUMEN_MUSICA", "0.18")),
             output_dir=output_dir,
             formula_path=ROOT_DIR / "config" / "formula_cocomelon.md",
         )

@@ -19,6 +19,7 @@ sin límites de plataforma.
 | 6. Almacenamiento | `almacenamiento.py` | Guarda JSON y tabla final | Activo |
 | 7. Montaje final | `montaje.py` | Une imágenes/clips + audio en un MP4 (ffmpeg) | Activo y validado |
 | 8. Voz / Narración | `voz.py` | TTS de las letras del guion (edge/gTTS/openai/mock) | Activo y validado |
+| 9. Subtítulos | `subtitulos.py` | Genera SRT desde las letras (opcionalmente quemado) | Activo y validado |
 
 > Los **nodos 1→3** están completos y **validados** en modo mock. El **nodo 5
 > (Higgsfield)** ya está implementado contra la API REST oficial, pero requiere
@@ -146,15 +147,46 @@ python -m agente_yt "Cancion de los colores" --narrar
 Con `--todo`, la narración se genera y se usa como audio del montaje
 automáticamente (salvo que pases un `--audio` explícito, que tiene prioridad).
 
+## Subtítulos (nodo 9)
+
+Genera un `.srt` a partir de las letras del guion, usando el rango de tiempo de
+cada escena (si falta, se distribuye por duración):
+
+```bash
+python -m agente_yt "Cancion de los colores" --srt         # solo el archivo .srt
+python -m agente_yt "Cancion de los colores" --subtitulos  # además los QUEMA en el vídeo
+```
+
+## Música de fondo
+
+Se mezcla en bucle **por debajo de la voz** (volumen bajo por defecto):
+
+```bash
+python -m agente_yt "Cancion de los colores" --todo \
+    --musica ./musica.mp3 --volumen-musica 0.15
+```
+
+## Modo lote (varios vídeos)
+
+Genera un vídeo por cada línea de un archivo (`tema | idioma | duracion`; solo el
+tema es obligatorio). Cada vídeo va a su propia subcarpeta en `salidas/lote/`:
+
+```bash
+# temas.txt:
+#   Cancion de los colores | es | 60
+#   Song about numbers | en
+python -m agente_yt --lote temas.txt --todo
+```
+
 ## Todo en uno
 
 ```bash
 python -m agente_yt "Cancion de los colores para ninos" --todo
 ```
 
-Encadena: guion → prompts → Higgsfield (imagen/vídeo) → voz (TTS) → montaje final.
-Cada etapa informa su estado; si faltan credenciales de Higgsfield, avisa y no
-gasta créditos.
+Encadena: guion → prompts → Higgsfield (imagen/vídeo) → voz (TTS) → **subtítulos**
+→ montaje final (con subtítulos quemados). Cada etapa informa su estado; si faltan
+credenciales de Higgsfield, avisa y no gasta créditos.
 
 ## Personalización
 

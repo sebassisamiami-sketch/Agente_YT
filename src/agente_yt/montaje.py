@@ -61,8 +61,8 @@ def resolver_ffmpeg(cfg: Config) -> str:
         ) from exc
 
 
-def _run(cmd: list[str]) -> None:
-    proc = subprocess.run(cmd, capture_output=True, text=True)
+def _run(cmd: list[str], cwd: str | None = None) -> None:
+    proc = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd)
     if proc.returncode != 0:
         # Ultimas lineas del log de ffmpeg para diagnosticar.
         cola = "\n".join(proc.stderr.strip().splitlines()[-8:])
@@ -146,8 +146,17 @@ def montar(
     salida: Path,
     cfg: Config,
     audio: Path | str | None = None,
+    musica: Path | str | None = None,
+    volumen_musica: float = 0.18,
+    subtitulos_srt: Path | str | None = None,
 ) -> Path:
-    """Ensambla los clips (y el audio opcional) en un MP4 final."""
+    """Ensambla los clips en un MP4 final.
+
+    - `audio`: pista principal (voz/narracion).
+    - `musica`: musica de fondo (se repite en bucle y se mezcla a bajo volumen
+      bajo la voz).
+    - `subtitulos_srt`: si se da, se queman los subtitulos en el video.
+    """
     if not clips:
         raise MontajeError("No hay clips para montar.")
     ff = resolver_ffmpeg(cfg)
@@ -190,21 +199,105 @@ def montar(
             str(video_mudo),
         ])
 
-        # Mezclar audio si se aporta; si no, exportar el video sin sonido.
-        if audio:
-            audio_path = Path(audio)
-            if not audio_path.exists():
-                raise MontajeError(f"No existe el audio: {audio_path}")
+        # (Opcional) Quemar subtitulos: re-codifica el video con el filtro subtitles.
+        video_base = video_mudo
+        if subtitulos_srt:
+            srt = Path(subtitulos_srt)
+            if not srt.exists():
+                raise MontajeError(f"No existe el SRT: {srt}")
+            # Copiar el srt al tmpdir con nombre simple para evitar escapes raros.
+            srt_local = tmpdir / "subs.srt"
+            shutil.copyfile(srt, srt_local)
+            video_sub = tmpdir / "video_sub.mp4"
+            estilo = (
+                "FontSize=22,Alignment=2,MarginV=40,PrimaryColour=&H00FFFFFF,"
+                "OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=1,Bold=1"
+            )
             _run([
-                ff, "-y", "-i", str(video_mudo), "-i", str(audio_path),
-                "-map", "0:v:0", "-map", "1:a:0",
-                "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-                "-shortest", str(salida),
-            ])
-        else:
-            shutil.copyfile(video_mudo, salida)
+                ff, "-y", "-i", str(video_mudo),
+                "-vf", f"subtitles=subs.srt:force_style='{estilo}'",
+                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(cfg.video_fps),
+                str(video_sub),
+            ], cwd=str(tmpdir))
+            video_base = video_sub
+
+        # Mezclar audio (voz y/o musica); si no hay ninguno, video sin sonido.
+        _muxear_audio(
+            ff, video_base, salida, audio, musica, volumen_musica
+        )
 
     return salida
+
+
+def _duracion_media(ff: str, ruta: Path) -> float:
+    """Devuelve la duracion (segundos) de un medio, leyendo la salida de ffmpeg."""
+    proc = subprocess.run([ff, "-i", str(ruta)], capture_output=True, text=True)
+    # ffmpeg imprime "Duration: HH:MM:SS.xx" en stderr (y devuelve codigo != 0).
+    import re as _re
+
+    m = _re.search(r"Duration:\s*(\d+):(\d+):(\d+\.?\d*)", proc.stderr)
+    if not m:
+        raise MontajeError(f"No se pudo leer la duracion de {ruta}.")
+    h, mnt, s = m.groups()
+    return int(h) * 3600 + int(mnt) * 60 + float(s)
+
+
+def _muxear_audio(
+    ff: str,
+    video: Path,
+    salida: Path,
+    voz: Path | str | None,
+    musica: Path | str | None,
+    volumen_musica: float,
+) -> None:
+    """Combina el video con voz y/o musica de fondo.
+
+    - Voz + musica: la musica se repite en bucle a bajo volumen bajo la voz.
+    - Solo voz: se conserva la duracion del video (voz + silencio si es corta).
+    - Solo musica: se repite en bucle hasta cubrir el video.
+    - Sin audio: se copia el video mudo.
+    """
+    voz_path = Path(voz) if voz else None
+    mus_path = Path(musica) if musica else None
+    if voz_path and not voz_path.exists():
+        raise MontajeError(f"No existe el audio de voz: {voz_path}")
+    if mus_path and not mus_path.exists():
+        raise MontajeError(f"No existe la musica: {mus_path}")
+
+    if not voz_path and not mus_path:
+        shutil.copyfile(video, salida)
+        return
+
+    vm = f"{max(0.0, volumen_musica):.3f}"
+    # Duracion del video: limitamos la salida con -t (robusto ante fuentes
+    # infinitas como apad o -stream_loop -1, que colgarian con -shortest).
+    dur = f"{_duracion_media(ff, video):.3f}"
+
+    if voz_path and mus_path:
+        cmd = [
+            ff, "-y", "-i", str(video), "-i", str(voz_path),
+            "-stream_loop", "-1", "-i", str(mus_path),
+            "-filter_complex",
+            f"[1:a]volume=1,apad[voz];[2:a]volume={vm}[mus];"
+            f"[voz][mus]amix=inputs=2:duration=longest:dropout_transition=0[a]",
+            "-map", "0:v:0", "-map", "[a]",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", dur, str(salida),
+        ]
+    elif voz_path:
+        cmd = [
+            ff, "-y", "-i", str(video), "-i", str(voz_path),
+            "-filter_complex", "[1:a]apad[a]",
+            "-map", "0:v:0", "-map", "[a]",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", dur, str(salida),
+        ]
+    else:  # solo musica
+        cmd = [
+            ff, "-y", "-i", str(video), "-stream_loop", "-1", "-i", str(mus_path),
+            "-filter_complex", f"[1:a]volume={vm}[a]",
+            "-map", "0:v:0", "-map", "[a]",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-t", dur, str(salida),
+        ]
+    _run(cmd)
 
 
 def montar_directorio(
@@ -214,6 +307,9 @@ def montar_directorio(
     audio: Path | str | None = None,
     duracion_imagen: float | None = None,
     con_zoom: bool = True,
+    musica: Path | str | None = None,
+    volumen_musica: float = 0.18,
+    subtitulos_srt: Path | str | None = None,
 ) -> Path:
     """Monta todos los medios de una carpeta, ordenados por nombre de archivo."""
     directorio = Path(directorio)
@@ -229,7 +325,10 @@ def montar_directorio(
     if not medios:
         raise MontajeError(f"La carpeta no contiene imagenes/videos: {directorio}")
     clips = [Clip(ruta=str(p), duracion=dur, con_zoom=con_zoom) for p in medios]
-    return montar(clips, salida, cfg, audio=audio)
+    return montar(
+        clips, salida, cfg, audio=audio, musica=musica,
+        volumen_musica=volumen_musica, subtitulos_srt=subtitulos_srt,
+    )
 
 
 def montar_desde_resultados(
@@ -238,6 +337,9 @@ def montar_desde_resultados(
     cfg: Config,
     audio: Path | str | None = None,
     duracion_imagen: float | None = None,
+    musica: Path | str | None = None,
+    volumen_musica: float = 0.18,
+    subtitulos_srt: Path | str | None = None,
 ) -> Path:
     """Monta a partir de los ResultadoEscena del Nodo 5 (usa video o imagen)."""
     dur = duracion_imagen if duracion_imagen is not None else cfg.img_duration
@@ -251,4 +353,7 @@ def montar_desde_resultados(
         raise MontajeError(
             "Ningun ResultadoEscena tiene image_url/video_url para montar."
         )
-    return montar(clips, salida, cfg, audio=audio)
+    return montar(
+        clips, salida, cfg, audio=audio, musica=musica,
+        volumen_musica=volumen_musica, subtitulos_srt=subtitulos_srt,
+    )
