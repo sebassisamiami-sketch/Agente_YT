@@ -24,7 +24,11 @@ SYSTEM_PROMPT = (
     "colors, lighting, camera angle, art style).\n"
     "3. Translate every visual prompt to ENGLISH (video/image AIs work best in "
     "English), regardless of the script's language.\n"
-    "4. Keep the original scene lyrics/dialogue in 'texto_escena' untouched.\n\n"
+    "4. Keep the original scene lyrics/dialogue in 'texto_escena' untouched.\n"
+    "5. CHARACTER CONSISTENCY: if the script includes a character bible or fixed "
+    "character traits, repeat those exact traits (age, skin, hair, eyes, outfit, "
+    "art style) inside EVERY 'prompt_en', so the video AI keeps the same "
+    "character across scenes.\n\n"
     "Return STRICT JSON ONLY, no markdown, no commentary, with this shape:\n"
     '{\n  "escenas": [\n'
     '    {"escena": 1, "rango_tiempo": "0:00-0:08", "texto_escena": "...", '
