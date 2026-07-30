@@ -42,9 +42,13 @@ def guardar_tabla(resultados: list[ResultadoEscena], output_dir: Path) -> Path:
     ruta = output_dir / "tabla_final.csv"
     with ruta.open("w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
-        writer.writerow(["escena", "texto_escena", "prompt_en", "video_url", "estado"])
+        writer.writerow(
+            ["escena", "texto_escena", "prompt_en", "image_url", "video_url",
+             "estado", "error"]
+        )
         for r in resultados:
             writer.writerow(
-                [r.escena, r.texto_escena, r.prompt_en, r.video_url, r.estado]
+                [r.escena, r.texto_escena, r.prompt_en, r.image_url, r.video_url,
+                 r.estado, r.error]
             )
     return ruta

@@ -100,10 +100,13 @@ class GuionVisual(BaseModel):
 
 
 class ResultadoEscena(BaseModel):
-    """Fila de la tabla final (Nodo 6): Escena | Texto | Link del video."""
+    """Fila de la tabla final (Nodo 6): Escena | Texto | Imagen | Video."""
 
     escena: int
     texto_escena: str = ""
     prompt_en: str = ""
+    image_url: str = ""
     video_url: str = ""
-    estado: str = "pendiente"  # pendiente | generando | listo | error
+    job_set_id: str = ""
+    estado: str = "pendiente"  # pendiente | listo | error | nsfw
+    error: str = ""

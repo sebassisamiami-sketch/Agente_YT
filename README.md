@@ -15,13 +15,14 @@ sin límites de plataforma.
 | 2. Agente Guionista | `guionista.py` | LLM + fórmula Cocomelon → guion | Activo |
 | 3. Prompts Visuales | `prompts_visuales.py` | LLM → JSON estricto en inglés | Activo |
 | 4. Iterador / Bucle | `iterador.py` | Recorre las escenas una a una | Activo |
-| 5. Higgsfield (video) | `higgsfield.py` | Envía cada prompt a la IA de video | **Stub (fase 2)** |
+| 5. Higgsfield (imagen/vídeo) | `higgsfield.py` | Texto→imagen (Soul) y opcional imagen→vídeo (DoP) | Implementado (requiere claves) |
 | 6. Almacenamiento | `almacenamiento.py` | Guarda JSON y tabla final | Activo |
 
-> Siguiendo la recomendación de construir por fases, los **nodos 1→3** están
-> completos y **validados**. El nodo 5 (Higgsfield) queda como stub con el
-> contrato y el esqueleto de la llamada listos para conectar cuando el JSON del
-> nodo 3 esté perfecto y tengas credenciales.
+> Los **nodos 1→3** están completos y **validados** en modo mock. El **nodo 5
+> (Higgsfield)** ya está implementado contra la API REST oficial, pero requiere
+> tus claves y consumir créditos, por lo que **no se ha podido probar en vivo**
+> desde el sandbox: su parseo de respuesta es defensivo y podría necesitar un
+> ajuste menor con tráfico real (ver nota más abajo).
 
 ## Uso rápido (modo `mock`, sin claves ni coste)
 
@@ -51,13 +52,39 @@ Genera en `salidas/`:
 3. Instala el SDK correspondiente: `pip install anthropic` (o `pip install openai`).
 4. Ejecuta el mismo comando de arriba.
 
-## Fase 2: conectar Higgsfield (nodo 5)
+## Fase 2: generar imágenes/vídeo con Higgsfield (nodo 5)
 
-Cuando el JSON del nodo 3 te convenza:
-1. Rellena `HIGGSFIELD_API_URL` y `HIGGSFIELD_API_KEY` en `.env`.
-2. Completa la llamada real en `higgsfield.py` (el esqueleto `httpx` ya está ahí).
-3. Ejecuta con `--generar-video` para recorrer las escenas y volcar la tabla
-   final `Escena | Texto | Link` en `salidas/tabla_final.csv`.
+Higgsfield expone una **API REST oficial** en `platform.higgsfield.ai` (no una API
+key simple, sino `KEY:SECRET`). Su flujo es **image-first**: de un prompt de texto
+genera una **imagen** (modelo Soul) y, opcionalmente, anima esa imagen a un **vídeo**
+(modelo DoP) usando un `motion_id`.
+
+1. Consigue tus claves en https://cloud.higgsfield.ai/api-keys y ponlas en `.env`:
+   ```ini
+   HIGGSFIELD_API_KEY=...
+   HIGGSFIELD_SECRET=...
+   HIGGSFIELD_QUALITY=1080p
+   ```
+2. Instala el cliente HTTP: `pip install httpx` (ya está en `requirements.txt`).
+3. (Opcional, para animar a vídeo) descubre los motions disponibles y fija uno:
+   ```bash
+   python -m agente_yt --listar-motions        # copia un "id"
+   # en .env:  HIGGSFIELD_MOTION_ID=<ese-id>
+   ```
+4. Ejecuta con `--generar-video`. El pipeline recorre cada escena (nodo 4),
+   genera imagen → (opcional) vídeo (nodo 5) y vuelca la tabla final
+   `Escena | Texto | Imagen | Vídeo` en `salidas/tabla_final.csv` (nodo 6).
+
+> Cada generación **consume créditos de pago** (imagen 1080p ~3 créditos; vídeo
+> DoP turbo ~6.5). Sin credenciales, el nodo 5 devuelve las escenas en estado
+> `pendiente` y no gasta nada, para que puedas validar la fase 1 tranquilo.
+
+> Nota técnica honesta: las rutas y el payload de la API provienen de clientes
+> MCP públicos de la comunidad. La forma exacta de la respuesta de
+> `/v1/job-sets/{id}` no está documentada oficialmente, así que el parseo del
+> estado/URL es **defensivo** (busca las claves habituales de forma recursiva) y
+> podría necesitar un pequeño ajuste al probarlo contra tráfico real. No se puede
+> probar en el sandbox (requiere credenciales y consumir créditos).
 
 ## Nota honesta
 
