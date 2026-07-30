@@ -21,3 +21,9 @@ httpx>=0.27
 # El modo "mock" NO requiere ninguno. Descomenta el que uses:
 # edge-tts>=6.1     # gratis, sin clave (recomendado)
 # gTTS>=2.5         # gratis, sin clave
+
+# --- Nodo 11: subida a YouTube (opcional) ---
+# Solo si vas a subir videos con --subir:
+# google-api-python-client>=2.100
+# google-auth>=2.30
+# google-auth-oauthlib>=1.2
