@@ -49,6 +49,11 @@ def _check_llm(cfg: Config) -> Chequeo:
         from .llm import _resolver_modelo, build_client
 
         client = build_client(cfg)
+        if cfg.provider == "multi":
+            activos = ", ".join(getattr(client, "nombres", []))
+            txt = client.complete("Responde solo con: OK", "Di OK")
+            muestra = (txt or "").strip().replace("\n", " ")[:40]
+            return Chequeo("LLM", OK, f"multi [{activos}] -> '{muestra}'")
         txt = client.complete("Responde solo con: OK", "Di OK")
         modelo = _resolver_modelo(cfg)
         muestra = (txt or "").strip().replace("\n", " ")[:40]

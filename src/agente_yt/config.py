@@ -30,6 +30,8 @@ class Config:
     openai_api_key: str
     nvidia_api_key: str
     nvidia_base_url: str
+    llm_providers: list[str]  # orden de proveedores para el modo 'multi'
+    llm_timeout: float  # timeout (s) por llamada LLM (evita cuelgues)
 
     # --- Higgsfield (nodo 5) ---
     higgsfield_base_url: str
@@ -89,6 +91,14 @@ class Config:
             nvidia_base_url=os.getenv(
                 "NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"
             ).rstrip("/"),
+            llm_providers=[
+                p.strip().lower()
+                for p in os.getenv(
+                    "AGENTE_YT_LLM_PROVIDERS", "nvidia,anthropic,openai"
+                ).split(",")
+                if p.strip()
+            ],
+            llm_timeout=float(os.getenv("AGENTE_YT_LLM_TIMEOUT", "60")),
             higgsfield_base_url=os.getenv(
                 "HIGGSFIELD_BASE_URL", "https://platform.higgsfield.ai"
             ).rstrip("/"),
