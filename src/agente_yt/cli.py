@@ -126,6 +126,16 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Privacidad del video subido (por defecto: unlisted).",
     )
+    parser.add_argument(
+        "--metadatos",
+        action="store_true",
+        help="Genera metadatos SEO (titulo, descripcion, tags, hashtags) con el LLM.",
+    )
+    parser.add_argument(
+        "--intro-outro",
+        action="store_true",
+        help="Anade portada (intro) y cierre (outro) animados al video.",
+    )
     args = parser.parse_args(argv)
 
     cfg = Config.from_env()
@@ -179,6 +189,8 @@ def main(argv: list[str] | None = None) -> int:
     subtitular = quemar_subtitulos or args.srt
     miniatura = args.miniatura or args.todo  # --todo genera miniatura
     subir = args.subir  # subir es SIEMPRE explicito (no lo activa --todo)
+    metadatos = args.metadatos or args.todo or args.subir  # SEO en --todo/--subir
+    intro_outro_activo = args.intro_outro or args.todo
 
     # Modo lote: genera un video por cada tema del archivo.
     if args.lote:
@@ -197,6 +209,8 @@ def main(argv: list[str] | None = None) -> int:
                 miniatura=miniatura,
                 subir=subir,
                 privacidad=args.privacidad,
+                metadatos=metadatos,
+                intro_outro_activo=intro_outro_activo,
             )
         except Exception as exc:  # noqa: BLE001
             print(f"[Agente_YT] ERROR de lote: {exc}", file=sys.stderr)
@@ -246,6 +260,8 @@ def main(argv: list[str] | None = None) -> int:
             miniatura=miniatura,
             subir=subir,
             privacidad=args.privacidad,
+            metadatos=metadatos,
+            intro_outro_activo=intro_outro_activo,
         )
     except Exception as exc:  # noqa: BLE001 - queremos un mensaje claro en CLI
         print(f"[Agente_YT] ERROR: {exc}", file=sys.stderr)
@@ -276,6 +292,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[Agente_YT] Voz generada: {res.ruta_voz}")
         if res.voz_nota:
             print(f"[Agente_YT] {res.voz_nota}")
+
+    if metadatos:
+        print("\n===== NODO 12: METADATOS SEO =====")
+        if res.metadatos:
+            print(f"[Agente_YT] Titulo: {res.metadatos.titulo}")
+            print(f"[Agente_YT] Tags: {', '.join(res.metadatos.tags)}")
+            print(f"[Agente_YT] Hashtags: {' '.join(res.metadatos.hashtags)}")
+        else:
+            print(f"[Agente_YT] {res.metadatos_nota}")
 
     if subtitular and res.ruta_srt:
         print("\n===== NODO 9: SUBTITULOS =====")

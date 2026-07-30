@@ -19,7 +19,9 @@ from . import (
     entrada,
     guionista,
     higgsfield,
+    intro_outro,
     iterador,
+    metadatos as metadatos_mod,
     montaje,
     prompts_visuales,
     subtitulos,
@@ -29,7 +31,7 @@ from . import (
 )
 from .config import Config
 from .llm import build_client
-from .schemas import Guion, GuionVisual, ResultadoEscena
+from .schemas import Guion, GuionVisual, Metadatos, ResultadoEscena
 
 
 @dataclass
@@ -44,10 +46,14 @@ class ResultadoPipeline:
     ruta_voz: Path | None = None
     ruta_srt: Path | None = None
     ruta_miniatura: Path | None = None
+    ruta_intro: Path | None = None
+    ruta_outro: Path | None = None
+    metadatos: Metadatos | None = None
     youtube_url: str = ""
     montaje_nota: str = ""  # aviso legible si el montaje no se pudo hacer
     voz_nota: str = ""  # aviso legible si la narracion no se pudo generar
     miniatura_nota: str = ""
+    metadatos_nota: str = ""
     youtube_nota: str = ""
 
 
@@ -67,6 +73,8 @@ def ejecutar(
     miniatura: bool = False,
     subir: bool = False,
     privacidad: str | None = None,
+    metadatos: bool = False,
+    intro_outro_activo: bool = False,
 ) -> ResultadoPipeline:
     cfg = cfg or Config.from_env()
     client = build_client(cfg)
@@ -86,6 +94,14 @@ def ejecutar(
         ruta_prompts=ruta_prompts,
         resultados=[],
     )
+
+    # --- Nodo 12 (opcional): metadatos SEO (titulo, descripcion, tags) ---
+    if metadatos:
+        try:
+            resultado.metadatos = metadatos_mod.generar_metadatos(guion, client)
+            almacenamiento.guardar_metadatos(resultado.metadatos, cfg.output_dir)
+        except ValueError as exc:
+            resultado.metadatos_nota = f"No se generaron metadatos: {exc}"
 
     # --- Fase 2 (opcional): iterar -> Higgsfield -> tabla final ---
     if generar_video:
@@ -122,6 +138,19 @@ def ejecutar(
         except ValueError as exc:
             resultado.montaje_nota = f"No se generaron subtitulos: {exc}"
 
+    # --- Nodo 13 (opcional): portada (intro) y cierre (outro) ---
+    if intro_outro_activo and montar:
+        try:
+            titulo_intro = resultado.metadatos.titulo if resultado.metadatos else tema
+            resultado.ruta_intro = intro_outro.generar_intro(
+                titulo_intro, cfg.output_dir / "intro", cfg, dur=cfg.intro_dur
+            )
+            resultado.ruta_outro = intro_outro.generar_outro(
+                cfg.outro_texto, cfg.output_dir / "outro", cfg, dur=cfg.outro_dur
+            )
+        except montaje.MontajeError as exc:
+            resultado.montaje_nota = f"No se generaron intro/outro: {exc}"
+
     # --- Fase 3 (opcional): montaje del video final (Nodo 7) ---
     musica_final = musica if musica is not None else (cfg.musica or None)
     if montar:
@@ -131,6 +160,8 @@ def ejecutar(
             audio_final,
             musica=musica_final,
             subtitulos_srt=srt_para_quemar,
+            intro=resultado.ruta_intro,
+            outro=resultado.ruta_outro,
         )
         if nota:
             resultado.montaje_nota = nota
@@ -155,12 +186,20 @@ def ejecutar(
                 "No se subio a YouTube: no hay video final (falta Higgsfield/montaje)."
             )
         else:
+            meta = resultado.metadatos
+            if meta:
+                titulo_yt = meta.titulo
+                descripcion_yt = metadatos_mod.descripcion_para_youtube(meta)
+                tags_yt = meta.tags
+            else:
+                titulo_yt, descripcion_yt, tags_yt = tema, guion.texto, None
             try:
                 resultado.youtube_url = youtube.subir_a_youtube(
                     resultado.ruta_video,
-                    titulo=tema,
-                    descripcion=guion.texto,
+                    titulo=titulo_yt,
+                    descripcion=descripcion_yt,
                     cfg=cfg,
+                    tags=tags_yt,
                     miniatura=resultado.ruta_miniatura,
                     privacidad=privacidad,
                 )
@@ -176,6 +215,8 @@ def _intentar_montaje(
     audio: str | None,
     musica: str | None = None,
     subtitulos_srt: Path | None = None,
+    intro: Path | None = None,
+    outro: Path | None = None,
 ) -> tuple[Path | None, str]:
     """Monta el video final si hay medios; si no, devuelve un aviso claro."""
     if not resultados:
@@ -199,6 +240,8 @@ def _intentar_montaje(
             musica=musica,
             volumen_musica=cfg.volumen_musica,
             subtitulos_srt=subtitulos_srt,
+            intro=intro,
+            outro=outro,
         )
         return ruta, ""
     except montaje.MontajeError as exc:
