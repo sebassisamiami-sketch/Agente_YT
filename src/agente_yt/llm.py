@@ -5,8 +5,15 @@ Proveedores soportados:
                  poder probar TODO el pipeline de extremo a extremo.
   - "anthropic": Claude (requiere paquete `anthropic` y ANTHROPIC_API_KEY).
   - "openai":    GPT (requiere paquete `openai` y OPENAI_API_KEY).
+  - "nvidia":    Modelos alojados por NVIDIA (build.nvidia.com) via su API
+                 COMPATIBLE con OpenAI (requiere paquete `openai` y NVIDIA_API_KEY).
+                 Util para estirar/abaratar tokens usando modelos abiertos
+                 potentes (Llama, Nemotron, DeepSeek...) sin perder calidad.
 
 Cada nodo LLM solo llama a `client.complete(system, user)` y recibe texto.
+
+Si no se fija AGENTE_YT_LLM_MODEL, cada proveedor usa un modelo por defecto
+razonable (ver `_MODELO_POR_DEFECTO`).
 """
 
 from __future__ import annotations
@@ -16,6 +23,20 @@ import re
 from abc import ABC, abstractmethod
 
 from .config import Config
+
+# Modelo por defecto de cada proveedor si no se fija AGENTE_YT_LLM_MODEL.
+_MODELO_POR_DEFECTO = {
+    "anthropic": "claude-3-5-sonnet-latest",
+    "openai": "gpt-4o",
+    # Modelo abierto potente y estable en build.nvidia.com; buen equilibrio
+    # calidad/coste. El usuario puede cambiarlo con AGENTE_YT_LLM_MODEL.
+    "nvidia": "meta/llama-3.3-70b-instruct",
+}
+
+
+def _resolver_modelo(cfg: Config) -> str:
+    """Devuelve el modelo configurado o el por defecto del proveedor."""
+    return cfg.model or _MODELO_POR_DEFECTO.get(cfg.provider, "")
 
 
 class LLMClient(ABC):
@@ -52,17 +73,34 @@ class AnthropicClient(LLMClient):
         )
 
 
-class OpenAIClient(LLMClient):
-    def __init__(self, api_key: str, model: str) -> None:
+class OpenAICompatibleClient(LLMClient):
+    """Cliente para cualquier API compatible con OpenAI (OpenAI y NVIDIA).
+
+    NVIDIA (build.nvidia.com) expone `/v1/chat/completions` con el mismo formato
+    que OpenAI, asi que basta con cambiar `base_url` y la clave.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        model: str,
+        *,
+        base_url: str | None = None,
+        env_var: str = "OPENAI_API_KEY",
+        paquete_hint: str = "openai",
+    ) -> None:
         try:
             from openai import OpenAI
         except ImportError as exc:  # pragma: no cover - depende del entorno
             raise RuntimeError(
-                "El proveedor 'openai' requiere el paquete: pip install openai"
+                f"Este proveedor requiere el paquete: pip install {paquete_hint}"
             ) from exc
         if not api_key:
-            raise RuntimeError("Falta OPENAI_API_KEY en el entorno (.env).")
-        self._client = OpenAI(api_key=api_key)
+            raise RuntimeError(f"Falta {env_var} en el entorno (.env).")
+        kwargs = {"api_key": api_key}
+        if base_url:
+            kwargs["base_url"] = base_url
+        self._client = OpenAI(**kwargs)
         self._model = model
 
     def complete(self, system: str, user: str) -> str:
@@ -157,13 +195,23 @@ class MockClient(LLMClient):
 
 def build_client(cfg: Config) -> LLMClient:
     """Fabrica el cliente segun la configuracion."""
+    modelo = _resolver_modelo(cfg)
     if cfg.provider == "mock":
         return MockClient()
     if cfg.provider == "anthropic":
-        return AnthropicClient(cfg.anthropic_api_key, cfg.model)
+        return AnthropicClient(cfg.anthropic_api_key, modelo)
     if cfg.provider == "openai":
-        return OpenAIClient(cfg.openai_api_key, cfg.model)
+        return OpenAICompatibleClient(
+            cfg.openai_api_key, modelo, env_var="OPENAI_API_KEY"
+        )
+    if cfg.provider == "nvidia":
+        return OpenAICompatibleClient(
+            cfg.nvidia_api_key,
+            modelo,
+            base_url=cfg.nvidia_base_url,
+            env_var="NVIDIA_API_KEY",
+        )
     raise ValueError(
         f"Proveedor LLM desconocido: '{cfg.provider}'. "
-        "Usa: mock | anthropic | openai"
+        "Usa: mock | anthropic | openai | nvidia"
     )
