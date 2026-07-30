@@ -92,6 +92,8 @@ def ejecutar_lote(
     miniatura: bool = False,
     subir: bool = False,
     privacidad: str | None = None,
+    metadatos: bool = False,
+    intro_outro_activo: bool = False,
 ) -> list[ResultadoItemLote]:
     """Ejecuta el pipeline para cada tema del archivo, en su propia subcarpeta."""
     cfg = cfg or Config.from_env()
@@ -118,6 +120,8 @@ def ejecutar_lote(
                 miniatura=miniatura,
                 subir=subir,
                 privacidad=privacidad,
+                metadatos=metadatos,
+                intro_outro_activo=intro_outro_activo,
             )
             resultados.append(ResultadoItemLote(item=item, carpeta=carpeta, resultado=res))
         except Exception as exc:  # noqa: BLE001 - un item fallido no corta el lote

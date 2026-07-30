@@ -99,6 +99,33 @@ class GuionVisual(BaseModel):
         return v
 
 
+class Metadatos(BaseModel):
+    """Metadatos SEO para YouTube generados por el LLM (Nodo 12)."""
+
+    titulo: str = Field(..., min_length=1, description="Titulo optimizado (<=100).")
+    descripcion: str = Field(default="", description="Descripcion del video.")
+    tags: list[str] = Field(default_factory=list, description="Etiquetas de busqueda.")
+    hashtags: list[str] = Field(default_factory=list, description="Hashtags (#...).")
+
+    @field_validator("titulo")
+    @classmethod
+    def _titulo_limite(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("El titulo no puede estar vacio.")
+        return v[:100]  # YouTube limita el titulo a 100 caracteres
+
+    @field_validator("hashtags")
+    @classmethod
+    def _normaliza_hashtags(cls, v: list[str]) -> list[str]:
+        out = []
+        for h in v:
+            h = h.strip().lstrip("#").strip()
+            if h:
+                out.append("#" + h)
+        return out
+
+
 class ResultadoEscena(BaseModel):
     """Fila de la tabla final (Nodo 6): Escena | Texto | Imagen | Video."""
 
