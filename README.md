@@ -110,6 +110,25 @@ solo cambia la `base_url` y la clave. Modelos por defecto por proveedor:
 | `openai` | `gpt-4o` |
 | `nvidia` | `meta/llama-3.3-70b-instruct` |
 
+### Modo `multi`: repartir entre varios proveedores
+
+Puedes usar **NVIDIA + Claude + OpenAI a la vez** para repartir la carga (y el
+coste) y ganar robustez: si uno falla o tarda demasiado, salta al siguiente
+automáticamente.
+
+```ini
+AGENTE_YT_LLM_PROVIDER=multi
+AGENTE_YT_LLM_PROVIDERS=nvidia,anthropic,openai   # orden de rotacion
+AGENTE_YT_LLM_TIMEOUT=60                           # segundos por llamada
+# + las claves de los que quieras usar (NVIDIA_API_KEY, ANTHROPIC_API_KEY, OPENAI_API_KEY)
+```
+
+- **Rotación round-robin:** cada llamada usa el siguiente proveedor.
+- **Fallback:** si un proveedor da error o supera el timeout, prueba el siguiente.
+- Solo se usan los proveedores que tengan credenciales (los demás se omiten).
+- `AGENTE_YT_LLM_TIMEOUT` evita que una respuesta lenta cuelgue el proceso (aplica
+  a todos los modos, no solo `multi`).
+
 ## Fase 2: generar imágenes/vídeo con Higgsfield (nodo 5)
 
 Higgsfield expone una **API REST oficial** en `platform.higgsfield.ai` (no una API
