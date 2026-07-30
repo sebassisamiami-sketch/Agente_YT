@@ -25,6 +25,8 @@ class Config:
     model: str
     anthropic_api_key: str
     openai_api_key: str
+    nvidia_api_key: str
+    nvidia_base_url: str
 
     # --- Higgsfield (nodo 5) ---
     higgsfield_base_url: str
@@ -65,9 +67,14 @@ class Config:
         output_dir = (ROOT_DIR / output) if not os.path.isabs(output) else Path(output)
         return cls(
             provider=os.getenv("AGENTE_YT_LLM_PROVIDER", "mock").strip().lower(),
-            model=os.getenv("AGENTE_YT_LLM_MODEL", "claude-3-5-sonnet-latest").strip(),
+            # Vacio = "auto": cada proveedor elige su modelo por defecto.
+            model=os.getenv("AGENTE_YT_LLM_MODEL", "").strip(),
             anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
             openai_api_key=os.getenv("OPENAI_API_KEY", ""),
+            nvidia_api_key=os.getenv("NVIDIA_API_KEY", ""),
+            nvidia_base_url=os.getenv(
+                "NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"
+            ).rstrip("/"),
             higgsfield_base_url=os.getenv(
                 "HIGGSFIELD_BASE_URL", "https://platform.higgsfield.ai"
             ).rstrip("/"),
