@@ -6,16 +6,19 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+# Raiz del repositorio (…/Agente_YT), calculada desde este archivo.
+ROOT_DIR = Path(__file__).resolve().parents[2]
+
 try:
     from dotenv import load_dotenv
 
+    # Carga robusta del .env: primero el de la raiz del repo (independiente del
+    # directorio actual) y ademas el del directorio de trabajo, por si acaso.
+    # Asi funciona tanto si ejecutas desde la raiz como desde otra carpeta.
+    load_dotenv(ROOT_DIR / ".env")
     load_dotenv()
 except ImportError:  # dotenv es opcional; si no esta, se usan las env vars tal cual
     pass
-
-
-# Raiz del repositorio (…/Agente_YT), calculada desde este archivo.
-ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 @dataclass(frozen=True)
