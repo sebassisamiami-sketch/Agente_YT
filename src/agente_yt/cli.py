@@ -23,7 +23,22 @@ def main(argv: list[str] | None = None) -> int:
         prog="agente_yt",
         description="Pipeline por nodos para generar contenido infantil de YouTube.",
     )
-    parser.add_argument("tema", help="Idea base / tema del video.")
+    parser.add_argument(
+        "tema",
+        nargs="?",
+        default=None,
+        help="Idea base / tema del video.",
+    )
+    parser.add_argument(
+        "--listar-motions",
+        action="store_true",
+        help="Lista los motion_id de Higgsfield (para animar a video) y sale.",
+    )
+    parser.add_argument(
+        "--listar-styles",
+        action="store_true",
+        help="Lista los estilos Soul de Higgsfield y sale.",
+    )
     parser.add_argument("--idioma", default="es", help="Idioma de la letra (es/en/pt).")
     parser.add_argument(
         "--duracion", type=int, default=90, help="Duracion objetivo en segundos."
@@ -36,6 +51,25 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     cfg = Config.from_env()
+
+    # Utilidades de descubrimiento de Higgsfield (no gastan creditos).
+    if args.listar_motions or args.listar_styles:
+        from .higgsfield import HiggsfieldClient, HiggsfieldError
+
+        try:
+            client = HiggsfieldClient(cfg)
+            datos = client.listar_motions() if args.listar_motions else client.listar_styles()
+        except HiggsfieldError as exc:
+            print(f"[Agente_YT] ERROR: {exc}", file=sys.stderr)
+            return 1
+        import json as _json
+
+        print(_json.dumps(datos, indent=2, ensure_ascii=False))
+        return 0
+
+    if not args.tema:
+        parser.error("se requiere el argumento 'tema' (o usa --listar-motions/--listar-styles)")
+
     print(f"[Agente_YT] Proveedor LLM: {cfg.provider} | modelo: {cfg.model}")
 
     try:
@@ -61,7 +95,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.generar_video:
         print("\n===== NODOS 4-6: GENERACION Y TABLA FINAL =====")
         for r in res.resultados:
-            print(f"  Escena {r.escena}: estado={r.estado} url={r.video_url or '-'}")
+            print(
+                f"  Escena {r.escena}: estado={r.estado} "
+                f"img={r.image_url or '-'} video={r.video_url or '-'}"
+                + (f" error={r.error}" if r.error else "")
+            )
         if res.ruta_tabla:
             print(f"\n[guardado] {res.ruta_tabla}")
 
