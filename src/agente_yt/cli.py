@@ -39,6 +39,32 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Lista los estilos Soul de Higgsfield y sale.",
     )
+    # --- Nodo 7: montaje ---
+    parser.add_argument(
+        "--montar-dir",
+        metavar="CARPETA",
+        help="Nodo 7: monta los medios (imagenes/videos) de la carpeta en un MP4 y sale.",
+    )
+    parser.add_argument(
+        "--audio", metavar="ARCHIVO", help="Pista de audio (voz/cancion) para el montaje."
+    )
+    parser.add_argument(
+        "--salida",
+        metavar="ARCHIVO",
+        default=None,
+        help="Ruta del video final (por defecto: salidas/video_final.mp4).",
+    )
+    parser.add_argument(
+        "--duracion-imagen",
+        type=float,
+        default=None,
+        help="Segundos por imagen fija en el montaje (por defecto AGENTE_YT_IMG_DURATION).",
+    )
+    parser.add_argument(
+        "--sin-zoom",
+        action="store_true",
+        help="Desactiva el efecto Ken Burns (zoom) en las imagenes.",
+    )
     parser.add_argument("--idioma", default="es", help="Idioma de la letra (es/en/pt).")
     parser.add_argument(
         "--duracion", type=int, default=90, help="Duracion objetivo en segundos."
@@ -67,8 +93,31 @@ def main(argv: list[str] | None = None) -> int:
         print(_json.dumps(datos, indent=2, ensure_ascii=False))
         return 0
 
+    # Nodo 7: montaje desde una carpeta de medios (no toca los LLM).
+    if args.montar_dir:
+        from .montaje import MontajeError, montar_directorio
+
+        salida = args.salida or str(cfg.output_dir / "video_final.mp4")
+        try:
+            ruta = montar_directorio(
+                args.montar_dir,
+                salida,
+                cfg,
+                audio=args.audio,
+                duracion_imagen=args.duracion_imagen,
+                con_zoom=not args.sin_zoom,
+            )
+        except MontajeError as exc:
+            print(f"[Agente_YT] ERROR de montaje: {exc}", file=sys.stderr)
+            return 1
+        print(f"[Agente_YT] Video final generado: {ruta}")
+        return 0
+
     if not args.tema:
-        parser.error("se requiere el argumento 'tema' (o usa --listar-motions/--listar-styles)")
+        parser.error(
+            "se requiere el argumento 'tema' (o usa --listar-motions / "
+            "--listar-styles / --montar-dir)"
+        )
 
     print(f"[Agente_YT] Proveedor LLM: {cfg.provider} | modelo: {cfg.model}")
 
