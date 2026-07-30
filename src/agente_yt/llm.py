@@ -9,6 +9,10 @@ Proveedores soportados:
                  COMPATIBLE con OpenAI (requiere paquete `openai` y NVIDIA_API_KEY).
                  Util para estirar/abaratar tokens usando modelos abiertos
                  potentes (Llama, Nemotron, DeepSeek...) sin perder calidad.
+  - "multi":     Reparte las llamadas entre varios proveedores (rotacion
+                 round-robin) con FALLBACK automatico si uno falla o tarda. La
+                 lista se define en AGENTE_YT_LLM_PROVIDERS (p.ej.
+                 "nvidia,anthropic,openai"). Solo usa los que tengan credenciales.
 
 Cada nodo LLM solo llama a `client.complete(system, user)` y recibe texto.
 
@@ -49,7 +53,7 @@ class LLMClient(ABC):
 
 
 class AnthropicClient(LLMClient):
-    def __init__(self, api_key: str, model: str) -> None:
+    def __init__(self, api_key: str, model: str, timeout: float | None = None) -> None:
         try:
             import anthropic
         except ImportError as exc:  # pragma: no cover - depende del entorno
@@ -58,7 +62,10 @@ class AnthropicClient(LLMClient):
             ) from exc
         if not api_key:
             raise RuntimeError("Falta ANTHROPIC_API_KEY en el entorno (.env).")
-        self._client = anthropic.Anthropic(api_key=api_key)
+        kwargs = {"api_key": api_key}
+        if timeout:
+            kwargs["timeout"] = timeout
+        self._client = anthropic.Anthropic(**kwargs)
         self._model = model
 
     def complete(self, system: str, user: str) -> str:
@@ -88,6 +95,7 @@ class OpenAICompatibleClient(LLMClient):
         base_url: str | None = None,
         env_var: str = "OPENAI_API_KEY",
         paquete_hint: str = "openai",
+        timeout: float | None = None,
     ) -> None:
         try:
             from openai import OpenAI
@@ -100,6 +108,8 @@ class OpenAICompatibleClient(LLMClient):
         kwargs = {"api_key": api_key}
         if base_url:
             kwargs["base_url"] = base_url
+        if timeout:
+            kwargs["timeout"] = timeout
         self._client = OpenAI(**kwargs)
         self._model = model
 
@@ -210,25 +220,85 @@ class MockClient(LLMClient):
         return json.dumps({"escenas": escenas}, ensure_ascii=False, indent=2)
 
 
-def build_client(cfg: Config) -> LLMClient:
-    """Fabrica el cliente segun la configuracion."""
-    modelo = _resolver_modelo(cfg)
-    if cfg.provider == "mock":
-        return MockClient()
-    if cfg.provider == "anthropic":
-        return AnthropicClient(cfg.anthropic_api_key, modelo)
-    if cfg.provider == "openai":
-        return OpenAICompatibleClient(
-            cfg.openai_api_key, modelo, env_var="OPENAI_API_KEY"
+class MultiClient(LLMClient):
+    """Reparte las llamadas entre varios proveedores (rotacion) con fallback.
+
+    - Rotacion round-robin: cada llamada empieza por el siguiente proveedor, para
+      repartir la carga (y el coste) entre todos.
+    - Fallback: si un proveedor falla o tarda demasiado (timeout), prueba con el
+      siguiente automaticamente. Solo falla si TODOS fallan.
+    """
+
+    def __init__(self, clientes: list[tuple[str, LLMClient]]) -> None:
+        if not clientes:
+            raise ValueError("MultiClient necesita al menos un proveedor.")
+        self._clientes = clientes
+        self._i = 0
+
+    @property
+    def nombres(self) -> list[str]:
+        return [n for n, _ in self._clientes]
+
+    def complete(self, system: str, user: str) -> str:
+        n = len(self._clientes)
+        errores: list[str] = []
+        for k in range(n):
+            idx = (self._i + k) % n
+            nombre, cli = self._clientes[idx]
+            try:
+                txt = cli.complete(system, user)
+                self._i = (idx + 1) % n  # la proxima llamada rota al siguiente
+                return txt
+            except Exception as exc:  # noqa: BLE001 - probamos el siguiente
+                errores.append(f"{nombre}: {str(exc)[:120]}")
+        raise RuntimeError(
+            "Todos los proveedores LLM fallaron:\n  " + "\n  ".join(errores)
         )
-    if cfg.provider == "nvidia":
+
+
+def _build_single(provider: str, cfg: Config, modelo: str | None = None) -> LLMClient:
+    """Construye el cliente de UN proveedor (usa su modelo por defecto si None)."""
+    if provider == "mock":
+        return MockClient()
+    modelo = modelo or _MODELO_POR_DEFECTO.get(provider, "")
+    t = cfg.llm_timeout
+    if provider == "anthropic":
+        return AnthropicClient(cfg.anthropic_api_key, modelo, timeout=t)
+    if provider == "openai":
+        return OpenAICompatibleClient(
+            cfg.openai_api_key, modelo, env_var="OPENAI_API_KEY", timeout=t
+        )
+    if provider == "nvidia":
         return OpenAICompatibleClient(
             cfg.nvidia_api_key,
             modelo,
             base_url=cfg.nvidia_base_url,
             env_var="NVIDIA_API_KEY",
+            timeout=t,
         )
     raise ValueError(
-        f"Proveedor LLM desconocido: '{cfg.provider}'. "
-        "Usa: mock | anthropic | openai | nvidia"
+        f"Proveedor LLM desconocido: '{provider}'. "
+        "Usa: mock | anthropic | openai | nvidia | multi"
     )
+
+
+def build_client(cfg: Config) -> LLMClient:
+    """Fabrica el cliente segun la configuracion."""
+    if cfg.provider == "multi":
+        clientes: list[tuple[str, LLMClient]] = []
+        errores: list[str] = []
+        for nombre in cfg.llm_providers:
+            if nombre in ("multi", "mock"):
+                continue
+            try:
+                # En modo multi cada proveedor usa su modelo por defecto.
+                clientes.append((nombre, _build_single(nombre, cfg, modelo=None)))
+            except Exception as exc:  # noqa: BLE001 - se omite el no configurado
+                errores.append(f"{nombre}: {str(exc)[:100]}")
+        if not clientes:
+            raise ValueError(
+                "Ningun proveedor configurado para el modo 'multi'. Detalles:\n  "
+                + "\n  ".join(errores)
+            )
+        return MultiClient(clientes)
+    return _build_single(cfg.provider, cfg, modelo=_resolver_modelo(cfg))
